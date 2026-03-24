@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace ZeroDiskProxy.Memory;
@@ -7,6 +8,10 @@ internal sealed class MemoryBudget
     private readonly long _reserveBytes;
     private readonly long _maxCacheBytes;
     private long _allocatedBytes;
+
+    private long _cachedAvailableMemory;
+    private long _memoryCacheTimestamp;
+    private static readonly long MemoryCacheTicks = Stopwatch.Frequency / 10;
 
     internal MemoryBudget(long reserveMb, long maxCacheMb)
     {
@@ -21,7 +26,7 @@ internal sealed class MemoryBudget
         if (requestedBytes <= 0)
             return true;
 
-        var limit = Math.Min(GetAvailablePhysicalMemory() - _reserveBytes, _maxCacheBytes);
+        var limit = Math.Min(GetCachedAvailablePhysicalMemory() - _reserveBytes, _maxCacheBytes);
         if (limit <= 0)
             return false;
 
@@ -36,7 +41,7 @@ internal sealed class MemoryBudget
 
         while (true)
         {
-            var available = GetAvailablePhysicalMemory();
+            var available = GetCachedAvailablePhysicalMemory();
             var current = Volatile.Read(ref _allocatedBytes);
             if (current < 0)
                 return false;
@@ -68,6 +73,22 @@ internal sealed class MemoryBudget
 
     internal static long EstimateProxySize(long originalFileSize, float scale)
         => (long)(originalFileSize * scale * scale * 0.3);
+
+    private long GetCachedAvailablePhysicalMemory()
+    {
+        var now = Stopwatch.GetTimestamp();
+        if (now - Volatile.Read(ref _memoryCacheTimestamp) < MemoryCacheTicks)
+        {
+            var cached = Volatile.Read(ref _cachedAvailableMemory);
+            if (cached > 0)
+                return cached;
+        }
+
+        var fresh = GetAvailablePhysicalMemory();
+        Volatile.Write(ref _cachedAvailableMemory, fresh);
+        Volatile.Write(ref _memoryCacheTimestamp, now);
+        return fresh;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MEMORYSTATUSEX

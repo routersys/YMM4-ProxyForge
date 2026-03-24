@@ -81,9 +81,16 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
                     Interlocked.Exchange(ref _upgradeFetching, 1) == 0)
                 {
                     Volatile.Write(ref _nextUpgradeAttemptTicks, now + Stopwatch.Frequency / 2);
-                    Task.Run(FetchUpgradeAsync);
+                    ThreadPool.UnsafeQueueUserWorkItem(static s => s.FetchUpgradeAsync(), this, preferLocal: false);
                 }
             }
+        }
+
+        if (_upgraded)
+        {
+            if (Volatile.Read(ref _disposed) == 0)
+                _inner.Update(time);
+            return;
         }
 
         lock (_gate)

@@ -9,6 +9,8 @@ public sealed class ProxyGenerationItem : Bindable
     public string OriginalPath { get; }
     public DateTime StartedAt { get; } = DateTime.Now;
 
+    private long _pendingProgressBits;
+
     private double _progress;
     public double Progress
     {
@@ -75,4 +77,10 @@ public sealed class ProxyGenerationItem : Bindable
         OriginalPath = originalPath;
         FileName = System.IO.Path.GetFileName(originalPath);
     }
+
+    internal void SetPendingProgress(double value) =>
+        Interlocked.Exchange(ref _pendingProgressBits, BitConverter.DoubleToInt64Bits(value));
+
+    internal void ApplyPendingProgress() =>
+        Progress = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _pendingProgressBits));
 }

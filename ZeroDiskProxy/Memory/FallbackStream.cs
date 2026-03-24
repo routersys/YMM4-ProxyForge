@@ -42,6 +42,12 @@ internal sealed class FallbackStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
+        if (_isFallenBack)
+        {
+            _inner.Write(buffer, offset, count);
+            return;
+        }
+
         lock (_switchLock)
         {
             if (!_isFallenBack && !_budget.CanAllocateInMemory(_inner.Position + count))
@@ -94,7 +100,13 @@ internal sealed class FallbackStream : Stream
         try
         {
             Directory.CreateDirectory(_fallbackDir);
-            var path = Path.Combine(_fallbackDir, string.Concat("zdp_", Guid.NewGuid().ToString("N"), ".tmp"));
+
+            Span<char> nameBuf = stackalloc char[40];
+            "zdp_".AsSpan().CopyTo(nameBuf);
+            Guid.NewGuid().TryFormat(nameBuf[4..], out _, "N");
+            ".tmp".AsSpan().CopyTo(nameBuf[36..]);
+            var path = Path.Combine(_fallbackDir, new string(nameBuf));
+
             var fileStream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read, 65536);
 
             var oldStream = _inner;
@@ -115,12 +127,6 @@ internal sealed class FallbackStream : Stream
         {
             Debug.WriteLine(string.Concat("[FallbackStream] Disk fallback failed: ", ex.Message));
         }
-    }
-
-    private void SwitchToDisk()
-    {
-        lock (_switchLock)
-            SwitchToDiskCore();
     }
 
     protected override void Dispose(bool disposing)

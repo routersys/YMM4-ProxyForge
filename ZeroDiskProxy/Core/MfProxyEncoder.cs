@@ -31,7 +31,13 @@ internal sealed class MfProxyEncoder : IProxyEncoder
         ValidateInputPath(inputPath);
 
         Directory.CreateDirectory(_fallbackDirectory);
-        var tempFileName = string.Concat("zdp_", Guid.NewGuid().ToString("N"), ".mp4");
+
+        Span<char> fileNameBuf = stackalloc char[40];
+        "zdp_".AsSpan().CopyTo(fileNameBuf);
+        Guid.NewGuid().TryFormat(fileNameBuf[4..], out _, "N");
+        ".mp4".AsSpan().CopyTo(fileNameBuf[36..]);
+        var tempFileName = new string(fileNameBuf);
+
         var tempPath = Path.Combine(_fallbackDirectory, tempFileName);
         ValidateTempPath(tempPath);
 
@@ -94,6 +100,7 @@ internal sealed class MfProxyEncoder : IProxyEncoder
             if (progressItem is not null)
             {
                 long lastReportedCenti = 0;
+                Action dispatchAction = progressItem.ApplyPendingProgress;
                 transcodeOp.Progress = (_, pct) =>
                 {
                     var p = Math.Min(99.0, pct);
@@ -102,9 +109,10 @@ internal sealed class MfProxyEncoder : IProxyEncoder
                     if (centi - prev < 100 && p < 99.0)
                         return;
                     Volatile.Write(ref lastReportedCenti, centi);
+                    progressItem.SetPendingProgress(p);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(
                         System.Windows.Threading.DispatcherPriority.Background,
-                        () => progressItem.Progress = p);
+                        dispatchAction);
                 };
             }
 
@@ -123,20 +131,37 @@ internal sealed class MfProxyEncoder : IProxyEncoder
             var fileSize = new FileInfo(tempPath).Length;
             if (_memoryBudget.TryAllocate(fileSize))
             {
+                byte[]? rented = null;
                 try
                 {
-                    var data = await File.ReadAllBytesAsync(tempPath, cancellationToken);
-                    var delta = data.LongLength - fileSize;
+                    await using var readStream = new FileStream(
+                        tempPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                        65536, FileOptions.SequentialScan | FileOptions.Asynchronous);
+                    var exactSize = (int)readStream.Length;
+                    rented = BufferPool.Rent(exactSize);
+                    int totalRead = 0;
+                    while (totalRead < exactSize)
+                    {
+                        int read = await readStream.ReadAsync(rented.AsMemory(totalRead, exactSize - totalRead), cancellationToken);
+                        if (read == 0)
+                            break;
+                        totalRead += read;
+                    }
+
+                    var delta = (long)totalRead - fileSize;
                     if (delta > 0)
                         _memoryBudget.RecordAllocation(delta);
                     else if (delta < 0)
                         _memoryBudget.RecordDeallocation(-delta);
 
-                    entry.SetMemoryData(data);
+                    entry.SetMemoryData(rented, totalRead);
+                    rented = null;
                     TryDeleteFile(tempPath);
                 }
                 catch
                 {
+                    if (rented is not null)
+                        BufferPool.Return(rented);
                     _memoryBudget.RecordDeallocation(fileSize);
                     throw;
                 }

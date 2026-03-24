@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using YukkuriMovieMaker.Resources.Localization;
 using ZeroDiskProxy.Interfaces;
@@ -27,29 +26,26 @@ internal sealed partial class ExportDetector : IExportDetector
     private static char[]? t_titleBuffer;
 
     private const int WindowTitleBufferSize = 512;
+    private const long CacheIntervalMs = 2000L;
+    private const long StateUnknown = 0L;
+    private const long StateFalse = 1L;
+    private const long StateTrue = 2L;
 
     private static readonly EnumWindowsProc s_enumWindowsCallback = EnumWindowsCallback;
 
-    private int _lastExportState = -1;
-    private long _lastCheckTicks;
-    private const long CacheIntervalTicks = 2000 * TimeSpan.TicksPerMillisecond;
+    private long _packed;
 
     public bool IsExporting()
     {
-        var now = Stopwatch.GetTimestamp();
-        var last = Volatile.Read(ref _lastCheckTicks);
-        var elapsedTicks = (now - last) * TimeSpan.TicksPerSecond / Stopwatch.Frequency;
+        var nowMs = Environment.TickCount64;
+        var packed = Interlocked.Read(ref _packed);
+        var state = packed & 3L;
 
-        if (elapsedTicks < CacheIntervalTicks)
-        {
-            var cached = Volatile.Read(ref _lastExportState);
-            if (cached >= 0)
-                return cached != 0;
-        }
+        if (state != StateUnknown && (nowMs - (packed >> 2)) < CacheIntervalMs)
+            return state == StateTrue;
 
-        Volatile.Write(ref _lastCheckTicks, now);
         var result = CheckExportWindow();
-        Volatile.Write(ref _lastExportState, result ? 1 : 0);
+        Interlocked.Exchange(ref _packed, (nowMs << 2) | (result ? StateTrue : StateFalse));
         return result;
     }
 
@@ -89,5 +85,5 @@ internal sealed partial class ExportDetector : IExportDetector
         return true;
     }
 
-    public void Reset() => Volatile.Write(ref _lastExportState, -1);
+    public void Reset() => Interlocked.Exchange(ref _packed, 0L);
 }

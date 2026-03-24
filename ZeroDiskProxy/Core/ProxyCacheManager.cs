@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Windows;
 using ZeroDiskProxy.Interfaces;
@@ -14,8 +13,29 @@ namespace ZeroDiskProxy.Core;
 
 internal sealed class ProxyCacheManager : IDisposable
 {
-    private readonly ConcurrentDictionary<string, ProxyCacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingGenerations = new(StringComparer.Ordinal);
+    private readonly struct CacheKey : IEquatable<CacheKey>
+    {
+        private readonly string _path;
+        private readonly float _scale;
+
+        internal CacheKey(string path, float scale)
+        {
+            _path = path;
+            _scale = scale;
+        }
+
+        public bool Equals(CacheKey other) =>
+            _scale == other._scale &&
+            string.Equals(_path, other._path, StringComparison.OrdinalIgnoreCase);
+
+        public override bool Equals(object? obj) => obj is CacheKey k && Equals(k);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(_path), _scale);
+    }
+
+    private readonly ConcurrentDictionary<CacheKey, ProxyCacheEntry> _cache = new();
+    private readonly ConcurrentDictionary<CacheKey, CancellationTokenSource> _pendingGenerations = new();
     private readonly IProxyEncoderFactory _encoderFactory;
     private readonly MemoryBudget _memoryBudget;
     private int _disposed;
@@ -29,18 +49,8 @@ internal sealed class ProxyCacheManager : IDisposable
         _memoryBudget = memoryBudget;
     }
 
-    private static string MakeCacheKey(string path, float scale)
-    {
-        var fullPath = GetFullPath(path);
-        Span<char> scaleBuf = stackalloc char[16];
-        scale.TryFormat(scaleBuf, out int scaleLen, "F3", CultureInfo.InvariantCulture);
-        return string.Create(fullPath.Length + 1 + scaleLen, (fullPath, scale, scaleLen), static (span, state) =>
-        {
-            state.fullPath.AsSpan().CopyTo(span);
-            span[state.fullPath.Length] = '|';
-            state.scale.TryFormat(span[(state.fullPath.Length + 1)..], out _, "F3", CultureInfo.InvariantCulture);
-        });
-    }
+    private static CacheKey MakeKey(string path, float scale) =>
+        new(GetFullPath(path), scale);
 
     private static string GetFullPath(string path)
     {
@@ -50,7 +60,7 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal ProxyCacheEntry? TryGetProxy(string originalPath, float scale)
     {
-        var key = MakeCacheKey(originalPath, scale);
+        var key = MakeKey(originalPath, scale);
         if (_cache.TryGetValue(key, out var entry) && entry.IsValid)
             return entry;
         return null;
@@ -58,7 +68,7 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal bool ProxyExists(string originalPath, float scale)
     {
-        var key = MakeCacheKey(originalPath, scale);
+        var key = MakeKey(originalPath, scale);
         return _cache.TryGetValue(key, out var entry) && entry.IsValid;
     }
 
@@ -67,7 +77,7 @@ internal sealed class ProxyCacheManager : IDisposable
         if (Volatile.Read(ref _disposed) != 0)
             return;
 
-        var key = MakeCacheKey(originalPath, scale);
+        var key = MakeKey(originalPath, scale);
 
         if (_cache.TryGetValue(key, out var existing) && existing.IsValid)
             return;
@@ -82,7 +92,7 @@ internal sealed class ProxyCacheManager : IDisposable
         _ = Task.Run(() => RunGenerationAsync(key, originalPath, scale, settings, cts), CancellationToken.None);
     }
 
-    private async Task RunGenerationAsync(string key, string originalPath, float scale, ZeroDiskProxySettings settings, CancellationTokenSource cts)
+    private async Task RunGenerationAsync(CacheKey key, string originalPath, float scale, ZeroDiskProxySettings settings, CancellationTokenSource cts)
     {
         var progressItem = new ProxyGenerationItem(originalPath);
         DispatchInvoke(() => ActiveGenerations.Add(progressItem));
@@ -158,7 +168,7 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal void RemoveProxy(string originalPath, float scale)
     {
-        var key = MakeCacheKey(originalPath, scale);
+        var key = MakeKey(originalPath, scale);
         if (!_cache.TryRemove(key, out var entry))
             return;
 
@@ -169,23 +179,23 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal (int count, long totalSize) ClearAll()
     {
-        foreach (var key in _pendingGenerations.Keys.ToArray())
+        foreach (var (key, cts) in _pendingGenerations)
         {
-            if (_pendingGenerations.TryRemove(key, out var cts))
+            if (_pendingGenerations.TryRemove(key, out var removed))
             {
-                try { cts.Cancel(); cts.Dispose(); }
+                try { removed.Cancel(); removed.Dispose(); }
                 catch { }
             }
         }
 
         long totalSize = 0;
         int count = 0;
-        foreach (var key in _cache.Keys.ToArray())
+        foreach (var (key, entry) in _cache)
         {
-            if (_cache.TryRemove(key, out var entry))
+            if (_cache.TryRemove(key, out var removed))
             {
-                totalSize += entry.DataSize;
-                entry.Dispose();
+                totalSize += removed.DataSize;
+                removed.Dispose();
                 count++;
             }
         }
@@ -196,14 +206,22 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal CacheEntrySnapshot[] GetAllSnapshots()
     {
-        var values = _cache.Values;
-        var result = new List<CacheEntrySnapshot>(values.Count);
-        foreach (var e in values)
+        var capacity = _cache.Count;
+        if (capacity == 0)
+            return [];
+
+        var result = new CacheEntrySnapshot[capacity];
+        int i = 0;
+        foreach (var entry in _cache.Values)
         {
-            if (e.IsValid)
-                result.Add(e.CreateSnapshot());
+            if (entry.IsValid && i < result.Length)
+                result[i++] = entry.CreateSnapshot();
         }
-        return result.ToArray();
+
+        if (i < result.Length)
+            Array.Resize(ref result, i);
+
+        return result;
     }
 
     internal (int entryCount, long memSize, long diskSize, int memCount, int diskCount) GetCacheInfo()

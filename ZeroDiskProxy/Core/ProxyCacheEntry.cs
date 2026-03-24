@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.IO;
+using ZeroDiskProxy.Memory;
 
 namespace ZeroDiskProxy.Core;
 
 internal sealed class ProxyCacheEntry : IDisposable
 {
     private byte[]? _memoryData;
+    private int _memoryDataLength;
     private string? _diskPath;
     private long _cachedSize;
     private long _lastAccessedTicks = DateTime.UtcNow.Ticks;
@@ -28,11 +30,12 @@ internal sealed class ProxyCacheEntry : IDisposable
         Scale = scale;
     }
 
-    internal void SetMemoryData(byte[] data)
+    internal void SetMemoryData(byte[] pooledBuffer, int length)
     {
-        Interlocked.Exchange(ref _cachedSize, data.LongLength);
+        Interlocked.Exchange(ref _cachedSize, (long)length);
+        _memoryDataLength = length;
         Volatile.Write(ref _diskPath, null);
-        Volatile.Write(ref _memoryData, data);
+        Volatile.Write(ref _memoryData, pooledBuffer);
         UpdateLastAccess();
     }
 
@@ -51,7 +54,12 @@ internal sealed class ProxyCacheEntry : IDisposable
 
         var mem = Volatile.Read(ref _memoryData);
         if (mem is not null)
-            return new MemoryStream(mem, writable: false);
+        {
+            var len = _memoryDataLength;
+            var copy = new byte[len];
+            Buffer.BlockCopy(mem, 0, copy, 0, len);
+            return new MemoryStream(copy, writable: false);
+        }
 
         var disk = Volatile.Read(ref _diskPath);
         if (disk is not null && File.Exists(disk))
@@ -80,8 +88,16 @@ internal sealed class ProxyCacheEntry : IDisposable
                 throw new InvalidOperationException("Proxy data unavailable");
 
             Directory.CreateDirectory(tempDirectory);
-            var tempPath = Path.Combine(tempDirectory, string.Concat("zdp_read_", Guid.NewGuid().ToString("N"), ".mp4"));
-            File.WriteAllBytes(tempPath, mem);
+
+            Span<char> nameBuf = stackalloc char[45];
+            "zdp_read_".AsSpan().CopyTo(nameBuf);
+            Guid.NewGuid().TryFormat(nameBuf[9..], out _, "N");
+            ".mp4".AsSpan().CopyTo(nameBuf[41..]);
+            var tempPath = Path.Combine(tempDirectory, new string(nameBuf));
+
+            using var fs = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536);
+            fs.Write(mem, 0, _memoryDataLength);
+
             Volatile.Write(ref _diskPath, tempPath);
             return tempPath;
         }
@@ -109,7 +125,10 @@ internal sealed class ProxyCacheEntry : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        Volatile.Write(ref _memoryData, null);
+        var mem = Interlocked.Exchange(ref _memoryData, null);
+        if (mem is not null)
+            BufferPool.Return(mem);
+
         var disk = Interlocked.Exchange(ref _diskPath, null);
         if (disk is null)
             return;

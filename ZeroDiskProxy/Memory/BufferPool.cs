@@ -4,10 +4,8 @@ namespace ZeroDiskProxy.Memory;
 
 internal static class BufferPool
 {
-    private static readonly ArrayPool<byte> Pool = ArrayPool<byte>.Create(16 * 1024 * 1024, 16);
-
-    internal static byte[] Rent(int minimumLength) => Pool.Rent(minimumLength);
-    internal static void Return(byte[] buffer, bool clearArray = false) => Pool.Return(buffer, clearArray);
+    internal static byte[] Rent(int minimumLength) => ArrayPool<byte>.Shared.Rent(minimumLength);
+    internal static void Return(byte[] buffer, bool clearArray = false) => ArrayPool<byte>.Shared.Return(buffer, clearArray);
 }
 
 internal readonly struct PooledBuffer : IDisposable
