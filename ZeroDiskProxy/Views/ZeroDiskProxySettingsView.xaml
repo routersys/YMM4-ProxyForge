@@ -255,19 +255,6 @@
                             <Label Content="{x:Static local:Translate.SettingHardwareAccelerationLabel}" Style="{StaticResource SettingLabel}"/>
                             <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=EnableHardwareAcceleration}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
-
-                        <Border Style="{StaticResource Divider}"/>
-
-                        <Grid Style="{StaticResource SettingRow}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Label Content="{x:Static local:Translate.SettingCpuCoreCountLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingCpuCoreCountTooltip}"/>
-                            </StackPanel>
-                            <c:TextBoxSlider x:Name="CpuCoreSlider"
-                                             Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=CpuCoreCount}"
-                                             Min="0" DefaultMax="4" DefaultMin="0" Delta="1"
-                                             StringFormat="F0" Unit=""
-                                             Width="200" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                        </Grid>
                     </StackPanel>
                 </StackPanel>
             </Expander>

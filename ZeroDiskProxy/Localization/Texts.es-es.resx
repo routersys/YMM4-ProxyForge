@@ -105,8 +105,6 @@
 <data name="SectionAdvancedSettingsHeader" xml:space="preserve"><value>Configuración avanzada</value></data>
 <data name="SettingEnableAdvancedLabel" xml:space="preserve"><value>Habilitar configuración avanzada</value></data>
 <data name="SettingHardwareAccelerationLabel" xml:space="preserve"><value>Aceleración por hardware</value></data>
-<data name="SettingCpuCoreCountLabel" xml:space="preserve"><value>Número de núcleos de CPU</value></data>
-<data name="SettingCpuCoreCountTooltip" xml:space="preserve"><value>0=Automático</value></data>
 <data name="SectionCacheManagementHeader" xml:space="preserve"><value>Gestión de caché</value></data>
 <data name="ButtonRefreshInfo" xml:space="preserve"><value>Actualizar información</value></data>
 <data name="ButtonClearCache" xml:space="preserve"><value>Borrar caché</value></data>

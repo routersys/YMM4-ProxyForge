@@ -5,11 +5,13 @@ namespace ZeroDiskProxy.Memory;
 internal sealed class MemoryBudget
 {
     private readonly long _reserveBytes;
+    private readonly long _maxCacheBytes;
     private long _allocatedBytes;
 
-    internal MemoryBudget(long reserveMb)
+    internal MemoryBudget(long reserveMb, long maxCacheMb)
     {
         _reserveBytes = reserveMb * 1024L * 1024L;
+        _maxCacheBytes = maxCacheMb * 1024L * 1024L;
     }
 
     internal long AllocatedBytes => Volatile.Read(ref _allocatedBytes);
@@ -19,7 +21,7 @@ internal sealed class MemoryBudget
         if (requestedBytes <= 0)
             return true;
 
-        var limit = GetAvailablePhysicalMemory() - _reserveBytes;
+        var limit = Math.Min(GetAvailablePhysicalMemory() - _reserveBytes, _maxCacheBytes);
         if (limit <= 0)
             return false;
 
@@ -32,13 +34,14 @@ internal sealed class MemoryBudget
         if (requestedBytes <= 0)
             return true;
 
+        var available = GetAvailablePhysicalMemory();
         while (true)
         {
             var current = Volatile.Read(ref _allocatedBytes);
             if (current < 0)
                 return false;
 
-            var limit = GetAvailablePhysicalMemory() - _reserveBytes;
+            var limit = Math.Min(available - _reserveBytes, _maxCacheBytes);
             if (limit <= 0)
                 return false;
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using Vortice.Direct2D1;
 using Vortice.Direct2D1.Effects;
@@ -12,9 +13,12 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
     private readonly Func<IVideoFileSource?>? _tryUpgradeSource;
     private readonly AffineTransform2D _switchEffect;
     private readonly ID2D1Image _output;
-    private readonly List<IVideoFileSource> _retiredSources = [];
+    private List<IVideoFileSource>? _retiredSources;
     private readonly object _gate = new();
     private volatile bool _upgraded;
+    private volatile IVideoFileSource? _pendingUpgrade;
+    private int _upgradeFetching;
+    private long _nextUpgradeAttemptTicks;
     private int _disposed;
 
     public TimeSpan Duration
@@ -51,32 +55,54 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
     {
         if (!_upgraded && _tryUpgradeSource is not null)
         {
-            try
+            var pending = _pendingUpgrade;
+            if (pending is not null)
             {
-                var upgraded = _tryUpgradeSource();
-                if (upgraded is not null)
+                _pendingUpgrade = null;
+                lock (_gate)
                 {
-                    lock (_gate)
+                    if (!_upgraded && Volatile.Read(ref _disposed) == 0)
                     {
-                        if (!_upgraded && Volatile.Read(ref _disposed) == 0)
-                        {
-                            _retiredSources.Add(_inner);
-                            _inner = upgraded;
-                            _switchEffect.SetInput(0, upgraded.Output, true);
-                            _upgraded = true;
-                        }
-                        else
-                        {
-                            upgraded.Dispose();
-                        }
+                        (_retiredSources ??= []).Add(_inner);
+                        _inner = pending;
+                        _switchEffect.SetInput(0, pending.Output, true);
+                        _upgraded = true;
+                    }
+                    else
+                    {
+                        pending.Dispose();
                     }
                 }
             }
-            catch { }
+            else
+            {
+                var now = Stopwatch.GetTimestamp();
+                if (now >= Volatile.Read(ref _nextUpgradeAttemptTicks) &&
+                    Interlocked.Exchange(ref _upgradeFetching, 1) == 0)
+                {
+                    Volatile.Write(ref _nextUpgradeAttemptTicks, now + Stopwatch.Frequency / 2);
+                    Task.Run(FetchUpgradeAsync);
+                }
+            }
         }
 
         lock (_gate)
             _inner.Update(time);
+    }
+
+    private void FetchUpgradeAsync()
+    {
+        try
+        {
+            var upgraded = _tryUpgradeSource!();
+            if (upgraded is not null)
+                _pendingUpgrade = upgraded;
+        }
+        catch { }
+        finally
+        {
+            Volatile.Write(ref _upgradeFetching, 0);
+        }
     }
 
     public int GetFrameIndex(TimeSpan time)
@@ -97,10 +123,19 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
             _switchEffect.Dispose();
             _inner.Dispose();
 
-            foreach (var source in _retiredSources)
-                source.Dispose();
+            if (_retiredSources is { } retired)
+            {
+                foreach (var source in retired)
+                    source.Dispose();
+                retired.Clear();
+            }
+        }
 
-            _retiredSources.Clear();
+        var orphan = _pendingUpgrade;
+        if (orphan is not null)
+        {
+            _pendingUpgrade = null;
+            orphan.Dispose();
         }
 
         GC.SuppressFinalize(this);

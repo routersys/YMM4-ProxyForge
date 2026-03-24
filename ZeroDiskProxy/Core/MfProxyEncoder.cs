@@ -13,12 +13,14 @@ internal sealed class MfProxyEncoder : IProxyEncoder
 {
     private readonly MemoryBudget _memoryBudget;
     private readonly string _fallbackDirectory;
+    private readonly EncoderConfig _config;
     private int _disposed;
 
-    internal MfProxyEncoder(MemoryBudget memoryBudget, string fallbackDirectory)
+    internal MfProxyEncoder(MemoryBudget memoryBudget, string fallbackDirectory, EncoderConfig config)
     {
         _memoryBudget = memoryBudget;
         _fallbackDirectory = fallbackDirectory;
+        _config = config;
     }
 
     public async Task<ProxyCacheEntry> EncodeAsync(
@@ -67,13 +69,13 @@ internal sealed class MfProxyEncoder : IProxyEncoder
 
             var transcoder = new MediaTranscoder
             {
-                HardwareAccelerationEnabled = true,
+                HardwareAccelerationEnabled = _config.EnableHardwareAcceleration,
                 VideoProcessingAlgorithm = MediaVideoProcessingAlgorithm.Default
             };
 
             var prepResult = await transcoder.PrepareFileTranscodeAsync(inputFile, outputFile, profile);
 
-            if (!prepResult.CanTranscode)
+            if (!prepResult.CanTranscode && _config.EnableHardwareAcceleration)
             {
                 transcoder.HardwareAccelerationEnabled = false;
                 prepResult = await transcoder.PrepareFileTranscodeAsync(inputFile, outputFile, profile);
@@ -88,17 +90,24 @@ internal sealed class MfProxyEncoder : IProxyEncoder
 
             if (progressItem is not null)
             {
-                transcodeOp.Progress = static (_, pct) => { };
+                long lastReportedCenti = 0;
                 transcodeOp.Progress = (_, pct) =>
                 {
                     var p = Math.Min(99.0, pct);
+                    var centi = (long)(p * 100);
+                    var prev = Volatile.Read(ref lastReportedCenti);
+                    if (centi - prev < 100 && p < 99.0)
+                        return;
+                    Volatile.Write(ref lastReportedCenti, centi);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(
                         System.Windows.Threading.DispatcherPriority.Background,
-                        () => { progressItem.Progress = p; });
+                        () => progressItem.Progress = p);
                 };
             }
 
-            using var reg = cancellationToken.Register(static state => ((Windows.Foundation.IAsyncOperationWithProgress<TranscodeFailureReason, double>)state!).Cancel(), transcodeOp);
+            using var reg = cancellationToken.Register(
+                static state => ((Windows.Foundation.IAsyncOperationWithProgress<TranscodeFailureReason, double>)state!).Cancel(),
+                transcodeOp);
             await transcodeOp;
 
             float effectiveScale = (float)proxyWidth / origWidth;
@@ -129,9 +138,13 @@ internal sealed class MfProxyEncoder : IProxyEncoder
                     throw;
                 }
             }
+            else if (_config.EnableDiskFallback)
+            {
+                entry.SetDiskPath(tempPath, fileSize);
+            }
             else
             {
-                entry.SetDiskPath(tempPath);
+                throw new InvalidOperationException("Insufficient memory for proxy and disk fallback is disabled.");
             }
 
             return entry;

@@ -14,7 +14,7 @@ namespace ZeroDiskProxy.Core;
 
 internal sealed class ProxyCacheManager : IDisposable
 {
-    private readonly ConcurrentDictionary<string, ProxyCacheEntry> _cache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ProxyCacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingGenerations = new(StringComparer.Ordinal);
     private readonly IProxyEncoderFactory _encoderFactory;
     private readonly MemoryBudget _memoryBudget;
@@ -30,12 +30,12 @@ internal sealed class ProxyCacheManager : IDisposable
     }
 
     private static string MakeCacheKey(string path, float scale)
-        => string.Concat(NormalizePath(path), "|", scale.ToString("F3", CultureInfo.InvariantCulture));
+        => $"{GetFullPath(path)}|{scale.ToString("F3", CultureInfo.InvariantCulture)}";
 
-    private static string NormalizePath(string path)
+    private static string GetFullPath(string path)
     {
-        try { return Path.GetFullPath(path).ToUpperInvariant(); }
-        catch { return path.ToUpperInvariant(); }
+        try { return Path.GetFullPath(path); }
+        catch { return path; }
     }
 
     internal ProxyCacheEntry? TryGetProxy(string originalPath, float scale)
@@ -78,8 +78,7 @@ internal sealed class ProxyCacheManager : IDisposable
     private async Task RunGenerationAsync(string key, string originalPath, float scale, ZeroDiskProxySettings settings, CancellationTokenSource cts)
     {
         var progressItem = new ProxyGenerationItem(originalPath);
-        DispatchInvoke(static state => ((ObservableCollection<ProxyGenerationItem>)state.collection).Add((ProxyGenerationItem)state.item),
-            (collection: (object)ActiveGenerations, item: (object)progressItem));
+        DispatchInvoke(() => ActiveGenerations.Add(progressItem));
 
         try
         {
@@ -88,78 +87,56 @@ internal sealed class ProxyCacheManager : IDisposable
                 originalPath, scale, settings.BitrateFactor / 100f, settings.GopSize,
                 progressItem, cts.Token);
 
-            _cache[key] = entry;
-
-            DispatchInvoke(static state =>
+            var stored = _cache.GetOrAdd(key, entry);
+            if (!ReferenceEquals(stored, entry))
             {
-                var (pi, inMem) = ((ProxyGenerationItem, bool))state;
-                pi.Progress = 100;
-                pi.IsCompleted = true;
-                pi.StatusMessage = Translate.ProxyGenerationStatusCompleted;
-                pi.IsInMemory = inMem;
-            }, (progressItem, entry.IsInMemory));
+                _memoryBudget.RecordDeallocation(entry.DataSize);
+                entry.Dispose();
+            }
 
-            ProxyCompleted?.Invoke(originalPath, entry);
+            var isInMem = stored.IsInMemory;
+            DispatchInvoke(() =>
+            {
+                progressItem.Progress = 100;
+                progressItem.IsCompleted = true;
+                progressItem.StatusMessage = Translate.ProxyGenerationStatusCompleted;
+                progressItem.IsInMemory = isInMem;
+            });
+
+            ProxyCompleted?.Invoke(originalPath, stored);
 
             await Task.Delay(2000, CancellationToken.None);
-            DispatchInvoke(static state =>
-            {
-                var (gens, pi) = ((ObservableCollection<ProxyGenerationItem>, ProxyGenerationItem))state;
-                gens.Remove(pi);
-            }, (ActiveGenerations, progressItem));
+            DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
         }
         catch (OperationCanceledException)
         {
-            DispatchInvoke(static state =>
+            DispatchInvoke(() =>
             {
-                var pi = (ProxyGenerationItem)state;
-                pi.StatusMessage = Translate.ProxyGenerationStatusCanceled;
-                pi.IsFailed = true;
-            }, progressItem);
+                progressItem.StatusMessage = Translate.ProxyGenerationStatusCanceled;
+                progressItem.IsFailed = true;
+            });
 
             await Task.Delay(3000, CancellationToken.None);
-            DispatchInvoke(static state =>
-            {
-                var (gens, pi) = ((ObservableCollection<ProxyGenerationItem>, ProxyGenerationItem))state;
-                gens.Remove(pi);
-            }, (ActiveGenerations, progressItem));
+            DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
         }
         catch (Exception ex)
         {
             var msg = ex.Message;
-            DispatchInvoke(static state =>
+            Debug.WriteLine(string.Concat("[ZeroDiskProxy] Proxy generation failed for ", originalPath, ": ", ex));
+            DispatchInvoke(() =>
             {
-                var (pi, m) = ((ProxyGenerationItem, string))state;
-                pi.StatusMessage = string.Concat(Translate.ProxyGenerationStatusFailedPrefix, m);
-                pi.IsFailed = true;
-            }, (progressItem, msg));
-
-            Debug.WriteLine(string.Concat("[ZeroDiskProxy] Proxy generation failed for ", originalPath, ": ", msg));
+                progressItem.StatusMessage = string.Concat(Translate.ProxyGenerationStatusFailedPrefix, msg);
+                progressItem.IsFailed = true;
+            });
 
             await Task.Delay(8000, CancellationToken.None);
-            DispatchInvoke(static state =>
-            {
-                var (gens, pi) = ((ObservableCollection<ProxyGenerationItem>, ProxyGenerationItem))state;
-                gens.Remove(pi);
-            }, (ActiveGenerations, progressItem));
+            DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
         }
         finally
         {
             _pendingGenerations.TryRemove(key, out _);
             cts.Dispose();
         }
-    }
-
-    private static void DispatchInvoke<TState>(Action<TState> action, TState state)
-    {
-        var app = Application.Current;
-        if (app is null)
-            return;
-
-        if (app.Dispatcher.CheckAccess())
-            action(state);
-        else
-            app.Dispatcher.Invoke(() => action(state));
     }
 
     private static void DispatchInvoke(Action action)
@@ -187,12 +164,9 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal (int count, long totalSize) ClearAll()
     {
-        var entries = _cache.Values.ToArray();
-        _cache.Clear();
-
-        foreach (var kvp in _pendingGenerations)
+        foreach (var key in _pendingGenerations.Keys.ToArray())
         {
-            if (_pendingGenerations.TryRemove(kvp.Key, out var cts))
+            if (_pendingGenerations.TryRemove(key, out var cts))
             {
                 try { cts.Cancel(); cts.Dispose(); }
                 catch { }
@@ -200,14 +174,19 @@ internal sealed class ProxyCacheManager : IDisposable
         }
 
         long totalSize = 0;
-        foreach (var e in entries)
+        int count = 0;
+        foreach (var key in _cache.Keys.ToArray())
         {
-            totalSize += e.DataSize;
-            e.Dispose();
+            if (_cache.TryRemove(key, out var entry))
+            {
+                totalSize += entry.DataSize;
+                entry.Dispose();
+                count++;
+            }
         }
 
         _memoryBudget.RecordDeallocation(totalSize);
-        return (entries.Length, totalSize);
+        return (count, totalSize);
     }
 
     internal CacheEntrySnapshot[] GetAllSnapshots()

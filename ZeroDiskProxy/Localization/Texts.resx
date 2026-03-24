@@ -105,8 +105,6 @@
 <data name="SectionAdvancedSettingsHeader" xml:space="preserve"><value>詳細設定</value></data>
 <data name="SettingEnableAdvancedLabel" xml:space="preserve"><value>詳細設定を有効にする</value></data>
 <data name="SettingHardwareAccelerationLabel" xml:space="preserve"><value>ハードウェアアクセラレーション</value></data>
-<data name="SettingCpuCoreCountLabel" xml:space="preserve"><value>使用CPUコア数</value></data>
-<data name="SettingCpuCoreCountTooltip" xml:space="preserve"><value>0=自動</value></data>
 <data name="SectionCacheManagementHeader" xml:space="preserve"><value>キャッシュ管理</value></data>
 <data name="ButtonRefreshInfo" xml:space="preserve"><value>情報を更新</value></data>
 <data name="ButtonClearCache" xml:space="preserve"><value>キャッシュをクリア</value></data>

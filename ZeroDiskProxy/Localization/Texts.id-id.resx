@@ -105,8 +105,6 @@
 <data name="SectionAdvancedSettingsHeader" xml:space="preserve"><value>Pengaturan Lanjutan</value></data>
 <data name="SettingEnableAdvancedLabel" xml:space="preserve"><value>Aktifkan Pengaturan Lanjutan</value></data>
 <data name="SettingHardwareAccelerationLabel" xml:space="preserve"><value>Akselerasi Perangkat Keras</value></data>
-<data name="SettingCpuCoreCountLabel" xml:space="preserve"><value>Jumlah Core CPU</value></data>
-<data name="SettingCpuCoreCountTooltip" xml:space="preserve"><value>0=Otomatis</value></data>
 <data name="SectionCacheManagementHeader" xml:space="preserve"><value>Manajemen Cache</value></data>
 <data name="ButtonRefreshInfo" xml:space="preserve"><value>Perbarui Info</value></data>
 <data name="ButtonClearCache" xml:space="preserve"><value>Hapus Cache</value></data>

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using YukkuriMovieMaker.Resources.Localization;
 using ZeroDiskProxy.Interfaces;
 
@@ -12,13 +11,22 @@ internal sealed partial class ExportDetector : IExportDetector
     private static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(nint hWnd, StringBuilder text, int count);
+    private static extern int GetWindowText(nint hWnd, char[] lpString, int nMaxCount);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumWindows(EnumWindowsProc enumProc, nint lParam);
 
     private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+
+    [ThreadStatic]
+    private static bool t_found;
+    [ThreadStatic]
+    private static uint t_processId;
+    [ThreadStatic]
+    private static char[]? t_titleBuffer;
+
+    private static readonly EnumWindowsProc s_enumWindowsCallback = EnumWindowsCallback;
 
     private int _lastExportState = -1;
     private long _lastCheckTicks;
@@ -47,30 +55,10 @@ internal sealed partial class ExportDetector : IExportDetector
     {
         try
         {
-            var currentProcessId = (uint)Environment.ProcessId;
-            bool found = false;
-
-            EnumWindows((hWnd, _) =>
-            {
-                GetWindowThreadProcessId(hWnd, out var windowPid);
-                if (windowPid != currentProcessId)
-                    return true;
-
-                StringBuilder buff = new(256);
-                int length = GetWindowText(hWnd, buff, 256);
-                if (length <= 0)
-                    return true;
-
-                var title = buff.ToString();
-                if (title == Texts.OutputProgressWindowTitle || title == Texts.VideoExportWindowTitle)
-                {
-                    found = true;
-                    return false;
-                }
-                return true;
-            }, nint.Zero);
-
-            return found;
+            t_processId = (uint)Environment.ProcessId;
+            t_found = false;
+            EnumWindows(s_enumWindowsCallback, nint.Zero);
+            return t_found;
         }
         catch
         {
@@ -78,8 +66,26 @@ internal sealed partial class ExportDetector : IExportDetector
         }
     }
 
-    public void Reset()
+    private static bool EnumWindowsCallback(nint hWnd, nint _)
     {
-        Volatile.Write(ref _lastExportState, -1);
+        GetWindowThreadProcessId(hWnd, out var pid);
+        if (pid != t_processId)
+            return true;
+
+        t_titleBuffer ??= new char[256];
+        var len = GetWindowText(hWnd, t_titleBuffer, t_titleBuffer.Length);
+        if (len <= 0)
+            return true;
+
+        var title = t_titleBuffer.AsSpan(0, len);
+        if (title.SequenceEqual(Texts.OutputProgressWindowTitle.AsSpan()) ||
+            title.SequenceEqual(Texts.VideoExportWindowTitle.AsSpan()))
+        {
+            t_found = true;
+            return false;
+        }
+        return true;
     }
+
+    public void Reset() => Volatile.Write(ref _lastExportState, -1);
 }

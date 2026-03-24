@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using YukkuriMovieMaker.Plugin;
 using ZeroDiskProxy.Localization;
 
@@ -10,9 +9,6 @@ internal sealed class ZeroDiskProxySettings : SettingsBase<ZeroDiskProxySettings
     public override string Name => Translate.SettingsName;
     public override bool HasSettingView => true;
     public override object? SettingView => new Views.ZeroDiskProxySettingsView();
-
-    [JsonIgnore]
-    public static int MaxCpuCoreCount => Environment.ProcessorCount;
 
     private bool _useProxy = true;
     public bool UseProxy
@@ -89,13 +85,6 @@ internal sealed class ZeroDiskProxySettings : SettingsBase<ZeroDiskProxySettings
     {
         get => _enableHardwareAcceleration;
         set => Set(ref _enableHardwareAcceleration, value);
-    }
-
-    private int _cpuCoreCount;
-    public int CpuCoreCount
-    {
-        get => _cpuCoreCount;
-        set => Set(ref _cpuCoreCount, Math.Clamp(value, 0, MaxCpuCoreCount));
     }
 
     private bool _enableDiskFallback = true;

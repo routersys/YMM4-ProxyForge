@@ -7,6 +7,9 @@ internal sealed class ProxyCacheEntry : IDisposable
 {
     private byte[]? _memoryData;
     private string? _diskPath;
+    private long _cachedSize;
+    private long _lastAccessedTicks = DateTime.UtcNow.Ticks;
+    private readonly object _diskWriteLock = new();
     private int _disposed;
 
     internal string OriginalPath { get; }
@@ -15,9 +18,9 @@ internal sealed class ProxyCacheEntry : IDisposable
     internal uint ProxyHeight { get; init; }
     internal bool IsInMemory => Volatile.Read(ref _memoryData) is not null;
     internal bool IsValid => Volatile.Read(ref _disposed) == 0 && (Volatile.Read(ref _memoryData) is not null || Volatile.Read(ref _diskPath) is not null);
-    internal long DataSize => Volatile.Read(ref _memoryData)?.Length ?? GetDiskFileSize();
+    internal long DataSize => Interlocked.Read(ref _cachedSize);
     internal DateTime CreatedAt { get; } = DateTime.UtcNow;
-    internal DateTime LastAccessedAt { get; private set; } = DateTime.UtcNow;
+    internal DateTime LastAccessedAt => new(Interlocked.Read(ref _lastAccessedTicks));
 
     internal ProxyCacheEntry(string originalPath, float scale)
     {
@@ -27,22 +30,24 @@ internal sealed class ProxyCacheEntry : IDisposable
 
     internal void SetMemoryData(byte[] data)
     {
+        Interlocked.Exchange(ref _cachedSize, data.LongLength);
         Volatile.Write(ref _memoryData, data);
         Volatile.Write(ref _diskPath, null);
-        LastAccessedAt = DateTime.UtcNow;
+        UpdateLastAccess();
     }
 
-    internal void SetDiskPath(string path)
+    internal void SetDiskPath(string path, long size)
     {
+        Interlocked.Exchange(ref _cachedSize, size);
         Volatile.Write(ref _diskPath, path);
         Volatile.Write(ref _memoryData, null);
-        LastAccessedAt = DateTime.UtcNow;
+        UpdateLastAccess();
     }
 
     internal Stream OpenReadStream()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        LastAccessedAt = DateTime.UtcNow;
+        UpdateLastAccess();
 
         var mem = Volatile.Read(ref _memoryData);
         if (mem is not null)
@@ -58,21 +63,28 @@ internal sealed class ProxyCacheEntry : IDisposable
     internal string GetOrCreateTempFilePath(string tempDirectory)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        LastAccessedAt = DateTime.UtcNow;
+        UpdateLastAccess();
 
         var disk = Volatile.Read(ref _diskPath);
         if (disk is not null && File.Exists(disk))
             return disk;
 
-        var mem = Volatile.Read(ref _memoryData);
-        if (mem is null)
-            throw new InvalidOperationException("Proxy data unavailable");
+        lock (_diskWriteLock)
+        {
+            disk = Volatile.Read(ref _diskPath);
+            if (disk is not null && File.Exists(disk))
+                return disk;
 
-        Directory.CreateDirectory(tempDirectory);
-        var tempPath = string.Concat(tempDirectory, Path.DirectorySeparatorChar.ToString(), "zdp_read_", Guid.NewGuid().ToString("N"), ".mp4");
-        File.WriteAllBytes(tempPath, mem);
-        Volatile.Write(ref _diskPath, tempPath);
-        return tempPath;
+            var mem = Volatile.Read(ref _memoryData);
+            if (mem is null)
+                throw new InvalidOperationException("Proxy data unavailable");
+
+            Directory.CreateDirectory(tempDirectory);
+            var tempPath = Path.Combine(tempDirectory, string.Concat("zdp_read_", Guid.NewGuid().ToString("N"), ".mp4"));
+            File.WriteAllBytes(tempPath, mem);
+            Volatile.Write(ref _diskPath, tempPath);
+            return tempPath;
+        }
     }
 
     internal CacheEntrySnapshot CreateSnapshot()
@@ -89,21 +101,8 @@ internal sealed class ProxyCacheEntry : IDisposable
             LastAccessedAt);
     }
 
-    private long GetDiskFileSize()
-    {
-        try
-        {
-            var disk = Volatile.Read(ref _diskPath);
-            if (disk is null)
-                return 0;
-            var info = new FileInfo(disk);
-            return info.Exists ? info.Length : 0;
-        }
-        catch
-        {
-            return 0;
-        }
-    }
+    private void UpdateLastAccess() =>
+        Interlocked.Exchange(ref _lastAccessedTicks, DateTime.UtcNow.Ticks);
 
     public void Dispose()
     {

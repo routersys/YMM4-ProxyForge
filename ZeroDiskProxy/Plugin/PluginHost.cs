@@ -47,9 +47,14 @@ internal sealed class PluginHost : IDisposable
     {
         var settings = ZeroDiskProxySettings.Default;
         var resources = new ResourceRegistry();
-        var budget = new MemoryBudget(settings.MemoryReserveMb);
+        var budget = new MemoryBudget(settings.MemoryReserveMb, settings.MaxCacheMemoryMb);
         var fallbackDirectory = Path.Combine(AppDirectories.TemporaryDirectory, "ZeroDiskProxyTemp");
-        IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(budget, fallbackDirectory);
+        IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
+            budget,
+            fallbackDirectory,
+            static () => new EncoderConfig(
+                ZeroDiskProxySettings.Default.EnableHardwareAcceleration,
+                ZeroDiskProxySettings.Default.EnableDiskFallback));
         IExportDetector exportDetector = new ExportDetector();
         return new PluginHost(resources, budget, encoderFactory, exportDetector, fallbackDirectory);
     }

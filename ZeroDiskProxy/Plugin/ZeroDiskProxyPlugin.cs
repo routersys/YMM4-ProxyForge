@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using YukkuriMovieMaker.Commons;
@@ -25,8 +26,9 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
         {
             return CreateCore(devices, filePath);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine(string.Concat("[ZeroDiskProxy] CreateCore failed for ", filePath, ": ", ex.Message));
             return FallbackLoad(devices, filePath);
         }
     }
@@ -84,8 +86,9 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
                 ? new ZeroDiskProxyVideoSourceWithScale(source, devices, entry.Scale)
                 : new ZeroDiskProxyVideoSource(source, devices);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine(string.Concat("[ZeroDiskProxy] LoadFromCache failed: ", ex.Message));
             return null;
         }
     }
@@ -109,7 +112,10 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
                 if (s is not null)
                     return s;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(string.Concat("[ZeroDiskProxy] Plugin ", plugin.Name, " failed for ", filePath, ": ", ex.Message));
+            }
         }
         return null;
     }
@@ -120,8 +126,9 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
         {
             return WrapFromOther(devices, filePath);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine(string.Concat("[ZeroDiskProxy] FallbackLoad failed for ", filePath, ": ", ex.Message));
             return null;
         }
     }
