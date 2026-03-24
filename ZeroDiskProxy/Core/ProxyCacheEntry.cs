@@ -9,33 +9,39 @@ internal sealed class ProxyCacheEntry : IDisposable
     private byte[]? _memoryData;
     private int _memoryDataLength;
     private string? _diskPath;
+    private readonly Action<long>? _onMemoryReleased;
     private long _cachedSize;
+    private long _trackedMemoryBytes;
     private long _lastAccessedTicks = DateTime.UtcNow.Ticks;
     private readonly object _diskWriteLock = new();
     private int _disposed;
     private int _streamCount;
+    private int _releaseMemoryWhenPossible;
 
     internal string OriginalPath { get; }
     internal float Scale { get; }
     internal uint ProxyWidth { get; init; }
     internal uint ProxyHeight { get; init; }
-    internal bool IsInMemory => Volatile.Read(ref _memoryData) is not null;
+    internal bool IsInMemory => Volatile.Read(ref _memoryData) is not null && Volatile.Read(ref _diskPath) is null;
     internal bool IsValid => Volatile.Read(ref _disposed) == 0 && (Volatile.Read(ref _memoryData) is not null || Volatile.Read(ref _diskPath) is not null);
     internal long DataSize => Interlocked.Read(ref _cachedSize);
     internal DateTime CreatedAt { get; } = DateTime.UtcNow;
     internal DateTime LastAccessedAt => new(Interlocked.Read(ref _lastAccessedTicks));
 
-    internal ProxyCacheEntry(string originalPath, float scale)
+    internal ProxyCacheEntry(string originalPath, float scale, Action<long>? onMemoryReleased = null)
     {
         OriginalPath = originalPath;
         Scale = scale;
+        _onMemoryReleased = onMemoryReleased;
     }
 
     internal void SetMemoryData(byte[] pooledBuffer, int length)
     {
+        Interlocked.Exchange(ref _trackedMemoryBytes, length);
         Interlocked.Exchange(ref _cachedSize, (long)length);
         Volatile.Write(ref _memoryDataLength, length);
         Volatile.Write(ref _diskPath, null);
+        Volatile.Write(ref _releaseMemoryWhenPossible, 0);
         Volatile.Write(ref _memoryData, pooledBuffer);
         UpdateLastAccess();
     }
@@ -43,8 +49,9 @@ internal sealed class ProxyCacheEntry : IDisposable
     internal void SetDiskPath(string path, long size)
     {
         Interlocked.Exchange(ref _cachedSize, size);
-        Volatile.Write(ref _memoryData, null);
         Volatile.Write(ref _diskPath, path);
+        Volatile.Write(ref _releaseMemoryWhenPossible, 1);
+        TryReturnBuffer();
         UpdateLastAccess();
     }
 
@@ -53,15 +60,26 @@ internal sealed class ProxyCacheEntry : IDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         UpdateLastAccess();
 
-        var mem = Volatile.Read(ref _memoryData);
-        if (mem is not null)
+        while (true)
         {
+            var mem = Volatile.Read(ref _memoryData);
+            if (mem is null)
+                break;
+
             Interlocked.Increment(ref _streamCount);
+
             if (Volatile.Read(ref _disposed) != 0)
             {
                 OnStreamClosed();
                 throw new ObjectDisposedException(nameof(ProxyCacheEntry));
             }
+
+            if (!ReferenceEquals(mem, Volatile.Read(ref _memoryData)))
+            {
+                OnStreamClosed();
+                continue;
+            }
+
             var len = Volatile.Read(ref _memoryDataLength);
             return new PooledMemoryStream(mem, len, this);
         }
@@ -104,6 +122,8 @@ internal sealed class ProxyCacheEntry : IDisposable
             fs.Write(mem, 0, Volatile.Read(ref _memoryDataLength));
 
             Volatile.Write(ref _diskPath, tempPath);
+            Volatile.Write(ref _releaseMemoryWhenPossible, 1);
+            TryReturnBuffer();
             return tempPath;
         }
     }
@@ -127,12 +147,23 @@ internal sealed class ProxyCacheEntry : IDisposable
 
     private void TryReturnBuffer()
     {
-        if (Volatile.Read(ref _disposed) != 0 && Volatile.Read(ref _streamCount) == 0)
-        {
-            var buf = Interlocked.Exchange(ref _memoryData, null);
-            if (buf is not null)
-                BufferPool.Return(buf);
-        }
+        if (Volatile.Read(ref _streamCount) != 0)
+            return;
+
+        if (Volatile.Read(ref _disposed) == 0 && Volatile.Read(ref _releaseMemoryWhenPossible) == 0)
+            return;
+
+        var buf = Interlocked.Exchange(ref _memoryData, null);
+        if (buf is null)
+            return;
+
+        Volatile.Write(ref _memoryDataLength, 0);
+        BufferPool.Return(buf);
+
+        var released = Interlocked.Exchange(ref _trackedMemoryBytes, 0);
+        if (released > 0)
+            _onMemoryReleased?.Invoke(released);
+
     }
 
     private void UpdateLastAccess() =>

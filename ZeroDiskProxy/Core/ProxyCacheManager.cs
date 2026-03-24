@@ -5,7 +5,6 @@ using System.IO;
 using System.Windows;
 using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Localization;
-using ZeroDiskProxy.Memory;
 using ZeroDiskProxy.Progress;
 using ZeroDiskProxy.Settings;
 
@@ -26,16 +25,14 @@ internal sealed class ProxyCacheManager : IDisposable
     private readonly ConcurrentDictionary<CacheKey, ProxyCacheEntry> _cache = new();
     private readonly ConcurrentDictionary<CacheKey, CancellationTokenSource> _pendingGenerations = new();
     private readonly IProxyEncoderFactory _encoderFactory;
-    private readonly MemoryBudget _memoryBudget;
     private int _disposed;
 
     internal ObservableCollection<ProxyGenerationItem> ActiveGenerations { get; } = [];
     internal event Action<string, ProxyCacheEntry>? ProxyCompleted;
 
-    internal ProxyCacheManager(IProxyEncoderFactory encoderFactory, MemoryBudget memoryBudget)
+    internal ProxyCacheManager(IProxyEncoderFactory encoderFactory)
     {
         _encoderFactory = encoderFactory;
-        _memoryBudget = memoryBudget;
     }
 
     private static CacheKey MakeKey(string path, float scale) =>
@@ -98,7 +95,6 @@ internal sealed class ProxyCacheManager : IDisposable
             var stored = _cache.GetOrAdd(key, entry);
             if (!ReferenceEquals(stored, entry))
             {
-                _memoryBudget.RecordDeallocation(entry.DataSize);
                 entry.Dispose();
             }
 
@@ -161,9 +157,7 @@ internal sealed class ProxyCacheManager : IDisposable
         if (!_cache.TryRemove(key, out var entry))
             return;
 
-        var size = entry.DataSize;
         entry.Dispose();
-        _memoryBudget.RecordDeallocation(size);
     }
 
     internal (int count, long totalSize) ClearAll()
@@ -189,7 +183,6 @@ internal sealed class ProxyCacheManager : IDisposable
             }
         }
 
-        _memoryBudget.RecordDeallocation(totalSize);
         return (count, totalSize);
     }
 

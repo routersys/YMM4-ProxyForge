@@ -110,13 +110,14 @@ internal sealed class MfProxyEncoder : IProxyEncoder
             await transcodeOp;
 
             float effectiveScale = (float)proxyWidth / origWidth;
-            entry = new ProxyCacheEntry(inputPath, effectiveScale)
+            entry = new ProxyCacheEntry(inputPath, effectiveScale, _memoryBudget.RecordDeallocation)
             {
                 ProxyWidth = proxyWidth,
                 ProxyHeight = proxyHeight
             };
 
-            var fileSize = new FileInfo(tempPath).Length;
+            using var tempHandle = File.OpenHandle(tempPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var fileSize = RandomAccess.GetLength(tempHandle);
             if (_memoryBudget.TryAllocate(fileSize))
             {
                 byte[]? rented = null;

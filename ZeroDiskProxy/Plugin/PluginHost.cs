@@ -34,7 +34,7 @@ internal sealed class PluginHost : IDisposable
         Budget = budget;
         ExportDetector = exportDetector;
         FallbackDirectory = fallbackDirectory;
-        CacheManager = new ProxyCacheManager(encoderFactory, Budget);
+        CacheManager = new ProxyCacheManager(encoderFactory);
 
         CacheManager.ActiveGenerations.CollectionChanged += OnGenerationsChanged;
     }
