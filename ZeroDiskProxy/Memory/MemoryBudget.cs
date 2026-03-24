@@ -1,0 +1,62 @@
+using System.Runtime.InteropServices;
+
+namespace ZeroDiskProxy.Memory;
+
+internal sealed class MemoryBudget
+{
+    private readonly long _reserveBytes;
+    private long _allocatedBytes;
+
+    internal MemoryBudget(long reserveMb)
+    {
+        _reserveBytes = reserveMb * 1024L * 1024L;
+    }
+
+    internal long AllocatedBytes => Volatile.Read(ref _allocatedBytes);
+
+    internal bool CanAllocateInMemory(long requestedBytes)
+    {
+        if (requestedBytes <= 0)
+            return true;
+        return GetAvailablePhysicalMemory() - requestedBytes > _reserveBytes;
+    }
+
+    internal void RecordAllocation(long bytes)
+    {
+        if (bytes > 0)
+            Interlocked.Add(ref _allocatedBytes, bytes);
+    }
+
+    internal void RecordDeallocation(long bytes)
+    {
+        if (bytes > 0)
+            Interlocked.Add(ref _allocatedBytes, -bytes);
+    }
+
+    internal static long EstimateProxySize(long originalFileSize, float scale)
+        => (long)(originalFileSize * scale * scale * 0.3);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEMORYSTATUSEX
+    {
+        public uint dwLength;
+        public uint dwMemoryLoad;
+        public ulong ullTotalPhys;
+        public ulong ullAvailPhys;
+        public ulong ullTotalPageFile;
+        public ulong ullAvailPageFile;
+        public ulong ullTotalVirtual;
+        public ulong ullAvailVirtual;
+        public ulong ullAvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+
+    private static long GetAvailablePhysicalMemory()
+    {
+        var status = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+        return GlobalMemoryStatusEx(ref status) ? (long)status.ullAvailPhys : 2L * 1024 * 1024 * 1024;
+    }
+}

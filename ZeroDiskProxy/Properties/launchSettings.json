@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "ZeroDiskProxy": {
+      "commandName": "Project"
+    },
+    "YMM4": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files\\YukkuriMovieMaker_v4_Lite_Dev\\YukkuriMovieMaker.exe"
+    }
+  }
+}
