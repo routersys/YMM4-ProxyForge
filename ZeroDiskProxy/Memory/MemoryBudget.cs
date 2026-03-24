@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace ZeroDiskProxy.Memory;
@@ -9,9 +8,8 @@ internal sealed class MemoryBudget
     private readonly long _maxCacheBytes;
     private long _allocatedBytes;
 
-    private long _cachedAvailableMemory;
-    private long _memoryCacheTimestamp;
-    private static readonly long MemoryCacheTicks = Stopwatch.Frequency / 10;
+    private long _memoryCachePacked;
+    private const long MemoryCacheIntervalMs = 100L;
 
     internal MemoryBudget(long reserveMb, long maxCacheMb)
     {
@@ -76,17 +74,20 @@ internal sealed class MemoryBudget
 
     private long GetCachedAvailablePhysicalMemory()
     {
-        var now = Stopwatch.GetTimestamp();
-        if (now - Volatile.Read(ref _memoryCacheTimestamp) < MemoryCacheTicks)
+        var nowMs = Environment.TickCount64;
+        var packed = Interlocked.Read(ref _memoryCachePacked);
+        var cachedMs = (uint)(packed >> 32);
+
+        if ((uint)nowMs - cachedMs < (uint)MemoryCacheIntervalMs)
         {
-            var cached = Volatile.Read(ref _cachedAvailableMemory);
-            if (cached > 0)
-                return cached;
+            var memKb = (uint)packed;
+            if (memKb > 0)
+                return (long)memKb * 1024L;
         }
 
         var fresh = GetAvailablePhysicalMemory();
-        Volatile.Write(ref _cachedAvailableMemory, fresh);
-        Volatile.Write(ref _memoryCacheTimestamp, now);
+        var freshKbCapped = (uint)Math.Min(fresh >> 10, (long)uint.MaxValue);
+        Interlocked.Exchange(ref _memoryCachePacked, ((long)(uint)nowMs << 32) | freshKbCapped);
         return fresh;
     }
 

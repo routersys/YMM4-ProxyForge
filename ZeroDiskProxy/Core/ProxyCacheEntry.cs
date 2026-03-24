@@ -13,6 +13,7 @@ internal sealed class ProxyCacheEntry : IDisposable
     private long _lastAccessedTicks = DateTime.UtcNow.Ticks;
     private readonly object _diskWriteLock = new();
     private int _disposed;
+    private int _streamCount;
 
     internal string OriginalPath { get; }
     internal float Scale { get; }
@@ -33,7 +34,7 @@ internal sealed class ProxyCacheEntry : IDisposable
     internal void SetMemoryData(byte[] pooledBuffer, int length)
     {
         Interlocked.Exchange(ref _cachedSize, (long)length);
-        _memoryDataLength = length;
+        Volatile.Write(ref _memoryDataLength, length);
         Volatile.Write(ref _diskPath, null);
         Volatile.Write(ref _memoryData, pooledBuffer);
         UpdateLastAccess();
@@ -55,10 +56,14 @@ internal sealed class ProxyCacheEntry : IDisposable
         var mem = Volatile.Read(ref _memoryData);
         if (mem is not null)
         {
-            var len = _memoryDataLength;
-            var copy = new byte[len];
-            Buffer.BlockCopy(mem, 0, copy, 0, len);
-            return new MemoryStream(copy, writable: false);
+            Interlocked.Increment(ref _streamCount);
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                OnStreamClosed();
+                throw new ObjectDisposedException(nameof(ProxyCacheEntry));
+            }
+            var len = Volatile.Read(ref _memoryDataLength);
+            return new PooledMemoryStream(mem, len, this);
         }
 
         var disk = Volatile.Read(ref _diskPath);
@@ -96,7 +101,7 @@ internal sealed class ProxyCacheEntry : IDisposable
             var tempPath = Path.Combine(tempDirectory, new string(nameBuf));
 
             using var fs = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536);
-            fs.Write(mem, 0, _memoryDataLength);
+            fs.Write(mem, 0, Volatile.Read(ref _memoryDataLength));
 
             Volatile.Write(ref _diskPath, tempPath);
             return tempPath;
@@ -117,6 +122,22 @@ internal sealed class ProxyCacheEntry : IDisposable
             LastAccessedAt);
     }
 
+    private void OnStreamClosed()
+    {
+        if (Interlocked.Decrement(ref _streamCount) == 0)
+            TryReturnBuffer();
+    }
+
+    private void TryReturnBuffer()
+    {
+        if (Volatile.Read(ref _disposed) != 0 && Volatile.Read(ref _streamCount) == 0)
+        {
+            var buf = Interlocked.Exchange(ref _memoryData, null);
+            if (buf is not null)
+                BufferPool.Return(buf);
+        }
+    }
+
     private void UpdateLastAccess() =>
         Interlocked.Exchange(ref _lastAccessedTicks, DateTime.UtcNow.Ticks);
 
@@ -125,9 +146,7 @@ internal sealed class ProxyCacheEntry : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        var mem = Interlocked.Exchange(ref _memoryData, null);
-        if (mem is not null)
-            BufferPool.Return(mem);
+        TryReturnBuffer();
 
         var disk = Interlocked.Exchange(ref _diskPath, null);
         if (disk is null)
@@ -141,6 +160,95 @@ internal sealed class ProxyCacheEntry : IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine(string.Concat("[ProxyCacheEntry] Delete failed: ", ex.Message));
+        }
+    }
+
+    private sealed class PooledMemoryStream : Stream
+    {
+        private readonly byte[] _buffer;
+        private readonly int _length;
+        private readonly ProxyCacheEntry _owner;
+        private int _position;
+        private int _disposed;
+
+        internal PooledMemoryStream(byte[] buffer, int length, ProxyCacheEntry owner)
+        {
+            _buffer = buffer;
+            _length = length;
+            _owner = owner;
+        }
+
+        public override bool CanRead => _disposed == 0;
+        public override bool CanSeek => _disposed == 0;
+        public override bool CanWrite => false;
+        public override long Length => _length;
+
+        public override long Position
+        {
+            get => _position;
+            set => _position = checked((int)value);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var available = _length - _position;
+            if (available <= 0) return 0;
+            var toRead = Math.Min(count, available);
+            Buffer.BlockCopy(_buffer, _position, buffer, offset, toRead);
+            _position += toRead;
+            return toRead;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            var available = _length - _position;
+            if (available <= 0) return 0;
+            var toRead = Math.Min(buffer.Length, available);
+            _buffer.AsSpan(_position, toRead).CopyTo(buffer);
+            _position += toRead;
+            return toRead;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return ValueTask.FromCanceled<int>(cancellationToken);
+            return ValueTask.FromResult(Read(buffer.Span));
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                return Task.FromCanceled<int>(cancellationToken);
+            return Task.FromResult(Read(buffer.AsSpan(offset, count)));
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            long newPos = origin switch
+            {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => _position + offset,
+                SeekOrigin.End => _length + offset,
+                _ => throw new ArgumentOutOfRangeException(nameof(origin))
+            };
+            _position = (int)Math.Clamp(newPos, 0L, (long)_length);
+            return _position;
+        }
+
+        public override void Flush() { }
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0 && disposing)
+                _owner.OnStreamClosed();
+            base.Dispose(disposing);
         }
     }
 }
