@@ -2,13 +2,19 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using YukkuriMovieMaker.Commons;
 using ZeroDiskProxy.Core;
+using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Localization;
-using ZeroDiskProxy.Plugin;
+using ZeroDiskProxy.Memory;
+using ZeroDiskProxy.Utilities;
 
 namespace ZeroDiskProxy.ViewModels;
 
 internal sealed class SettingsViewModel : Bindable
 {
+    private readonly ProxyCacheManager? _cacheManager;
+    private readonly MemoryBudget? _budget;
+    private readonly IDialogService _dialogService;
+
     private string _cacheSummaryText = Translate.CacheSummaryLoading;
     public string CacheSummaryText
     {
@@ -36,8 +42,11 @@ internal sealed class SettingsViewModel : Bindable
     public ICommand RefreshCacheInfoCommand { get; }
     public ICommand RemoveCacheEntryCommand { get; }
 
-    internal SettingsViewModel()
+    internal SettingsViewModel(ProxyCacheManager? cacheManager, MemoryBudget? budget, IDialogService dialogService)
     {
+        _cacheManager = cacheManager;
+        _budget = budget;
+        _dialogService = dialogService;
         ClearCacheCommand = new ActionCommand(ExecuteClearCache);
         RefreshCacheInfoCommand = new ActionCommand(ExecuteRefreshCacheInfo);
         RemoveCacheEntryCommand = new ActionCommand<CacheEntryViewModel>(ExecuteRemoveEntry);
@@ -46,29 +55,19 @@ internal sealed class SettingsViewModel : Bindable
 
     private void ExecuteClearCache()
     {
-        var manager = PluginHost.Instance?.CacheManager;
-        if (manager is null)
+        if (_cacheManager is null)
             return;
 
-        var (count, totalSize) = manager.ClearAll();
+        var (count, totalSize) = _cacheManager.ClearAll();
         if (count == 0)
         {
-            System.Windows.MessageBox.Show(
-                Translate.CacheNoEntriesToDelete,
-                Translate.AppName,
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
+            _dialogService.ShowInformation(Translate.CacheNoEntriesToDelete, Translate.AppName);
         }
         else
         {
-            System.Windows.MessageBox.Show(
-                string.Format(
-                    Translate.CacheDeleteSummaryFormat,
-                    count.ToString("N0"),
-                    FormatBytes(totalSize)),
-                Translate.AppName,
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
+            _dialogService.ShowInformation(
+                string.Format(Translate.CacheDeleteSummaryFormat, count.ToString("N0"), ByteFormatter.Format(totalSize)),
+                Translate.AppName);
         }
 
         ExecuteRefreshCacheInfo();
@@ -76,8 +75,7 @@ internal sealed class SettingsViewModel : Bindable
 
     private void ExecuteRefreshCacheInfo()
     {
-        var manager = PluginHost.Instance?.CacheManager;
-        if (manager is null)
+        if (_cacheManager is null)
         {
             CacheSummaryText = Translate.CacheSummaryPluginNotInitialized;
             MemoryUsageText = "";
@@ -85,26 +83,25 @@ internal sealed class SettingsViewModel : Bindable
             return;
         }
 
-        var (count, memSize, diskSize, memCount, diskCount) = manager.GetCacheInfo();
+        var (count, memSize, diskSize, memCount, diskCount) = _cacheManager.GetCacheInfo();
         CacheSummaryText = string.Format(Translate.CacheSummaryCountFormat, count.ToString("N0"));
 
         var usageText = string.Format(
             Translate.CacheUsageMemoryAndDiskFormat,
             memCount.ToString("N0"),
-            FormatBytes(memSize),
+            ByteFormatter.Format(memSize),
             diskCount.ToString("N0"),
-            FormatBytes(diskSize));
+            ByteFormatter.Format(diskSize));
 
-        var budget = PluginHost.Instance?.Budget;
-        if (budget is not null)
+        if (_budget is not null)
             usageText = string.Concat(
                 usageText,
-                string.Format(Translate.CacheUsageAllocatedFormat, FormatBytes(budget.AllocatedBytes)));
+                string.Format(Translate.CacheUsageAllocatedFormat, ByteFormatter.Format(_budget.AllocatedBytes)));
 
         MemoryUsageText = usageText;
 
         CacheEntries.Clear();
-        var snapshots = manager.GetAllSnapshots();
+        var snapshots = _cacheManager.GetAllSnapshots();
         foreach (var snap in snapshots)
             CacheEntries.Add(new CacheEntryViewModel(snap));
 
@@ -113,31 +110,11 @@ internal sealed class SettingsViewModel : Bindable
 
     private void ExecuteRemoveEntry(CacheEntryViewModel? entry)
     {
-        if (entry is null)
+        if (entry is null || _cacheManager is null)
             return;
 
-        var manager = PluginHost.Instance?.CacheManager;
-        if (manager is null)
-            return;
-
-        manager.RemoveProxy(entry.OriginalPath, entry.Scale);
+        _cacheManager.RemoveProxy(entry.OriginalPath, entry.Scale);
         ExecuteRefreshCacheInfo();
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0)
-            return "0 B";
-
-        string[] sizes = ["B", "KB", "MB", "GB", "TB"];
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return string.Concat(len.ToString("0.##"), " ", sizes[order]);
     }
 }
 
@@ -164,26 +141,10 @@ internal sealed class CacheEntryViewModel : Bindable
         IsInMemory = snapshot.IsInMemory;
         StorageType = snapshot.IsInMemory ? Translate.StorageMemory : Translate.StorageDisk;
         DataSize = snapshot.DataSize;
-        DataSizeText = FormatBytes(snapshot.DataSize);
+        DataSizeText = ByteFormatter.Format(snapshot.DataSize);
         CreatedAtText = snapshot.CreatedAt.ToLocalTime().ToString("HH:mm:ss");
         LastAccessedText = snapshot.LastAccessedAt.ToLocalTime().ToString("HH:mm:ss");
         ScaleText = string.Concat((snapshot.Scale * 100).ToString("F0"), "%");
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0)
-            return "0 B";
-
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        int order = 0;
-        while (value >= 1024 && order < units.Length - 1)
-        {
-            order++;
-            value /= 1024;
-        }
-        return string.Concat(value.ToString("0.##"), " ", units[order]);
     }
 }
 

@@ -34,9 +34,9 @@ internal sealed class MemoryBudget
         if (requestedBytes <= 0)
             return true;
 
-        var available = GetAvailablePhysicalMemory();
         while (true)
         {
+            var available = GetAvailablePhysicalMemory();
             var current = Volatile.Read(ref _allocatedBytes);
             if (current < 0)
                 return false;

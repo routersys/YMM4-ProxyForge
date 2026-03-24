@@ -31,16 +31,16 @@ internal sealed class ProxyCacheEntry : IDisposable
     internal void SetMemoryData(byte[] data)
     {
         Interlocked.Exchange(ref _cachedSize, data.LongLength);
-        Volatile.Write(ref _memoryData, data);
         Volatile.Write(ref _diskPath, null);
+        Volatile.Write(ref _memoryData, data);
         UpdateLastAccess();
     }
 
     internal void SetDiskPath(string path, long size)
     {
         Interlocked.Exchange(ref _cachedSize, size);
-        Volatile.Write(ref _diskPath, path);
         Volatile.Write(ref _memoryData, null);
+        Volatile.Write(ref _diskPath, path);
         UpdateLastAccess();
     }
 

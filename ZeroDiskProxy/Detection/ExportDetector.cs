@@ -26,6 +26,8 @@ internal sealed partial class ExportDetector : IExportDetector
     [ThreadStatic]
     private static char[]? t_titleBuffer;
 
+    private const int WindowTitleBufferSize = 512;
+
     private static readonly EnumWindowsProc s_enumWindowsCallback = EnumWindowsCallback;
 
     private int _lastExportState = -1;
@@ -72,7 +74,7 @@ internal sealed partial class ExportDetector : IExportDetector
         if (pid != t_processId)
             return true;
 
-        t_titleBuffer ??= new char[256];
+        t_titleBuffer ??= new char[WindowTitleBufferSize];
         var len = GetWindowText(hWnd, t_titleBuffer, t_titleBuffer.Length);
         if (len <= 0)
             return true;

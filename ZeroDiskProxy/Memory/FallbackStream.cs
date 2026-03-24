@@ -42,9 +42,12 @@ internal sealed class FallbackStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        if (!_isFallenBack && !_budget.CanAllocateInMemory(_inner.Position + count))
-            SwitchToDisk();
-        _inner.Write(buffer, offset, count);
+        lock (_switchLock)
+        {
+            if (!_isFallenBack && !_budget.CanAllocateInMemory(_inner.Position + count))
+                SwitchToDiskCore();
+            _inner.Write(buffer, offset, count);
+        }
     }
 
     internal byte[] ToArray()
@@ -83,38 +86,41 @@ internal sealed class FallbackStream : Stream
         }
     }
 
+    private void SwitchToDiskCore()
+    {
+        if (_isFallenBack)
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(_fallbackDir);
+            var path = Path.Combine(_fallbackDir, string.Concat("zdp_", Guid.NewGuid().ToString("N"), ".tmp"));
+            var fileStream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read, 65536);
+
+            var oldStream = _inner;
+            var position = oldStream.Position;
+            oldStream.Position = 0;
+            oldStream.CopyTo(fileStream);
+            fileStream.Position = position;
+
+            var memLength = oldStream.Length;
+            _inner = fileStream;
+            _fallbackPath = path;
+            _isFallenBack = true;
+
+            oldStream.Dispose();
+            _budget.RecordDeallocation(memLength);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(string.Concat("[FallbackStream] Disk fallback failed: ", ex.Message));
+        }
+    }
+
     private void SwitchToDisk()
     {
         lock (_switchLock)
-        {
-            if (_isFallenBack)
-                return;
-
-            try
-            {
-                Directory.CreateDirectory(_fallbackDir);
-                var path = Path.Combine(_fallbackDir, string.Concat("zdp_", Guid.NewGuid().ToString("N"), ".tmp"));
-                var fileStream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read, 65536);
-
-                var oldStream = _inner;
-                var position = oldStream.Position;
-                oldStream.Position = 0;
-                oldStream.CopyTo(fileStream);
-                fileStream.Position = position;
-
-                var memLength = oldStream.Length;
-                _inner = fileStream;
-                _fallbackPath = path;
-                _isFallenBack = true;
-
-                oldStream.Dispose();
-                _budget.RecordDeallocation(memLength);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(string.Concat("[FallbackStream] Disk fallback failed: ", ex.Message));
-            }
-        }
+            SwitchToDiskCore();
     }
 
     protected override void Dispose(bool disposing)

@@ -24,19 +24,7 @@ public partial class GenerationPopupView : Window
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_viewModel.Items.Count > 0)
-        {
-            if (!IsVisible)
-            {
-                Show();
-            }
-
             Dispatcher.BeginInvoke(PositionBottomRight, DispatcherPriority.Loaded);
-        }
-        else
-        {
-            if (IsVisible)
-                Hide();
-        }
     }
 
     private void PositionBottomRight()

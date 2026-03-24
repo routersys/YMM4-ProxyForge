@@ -28,10 +28,13 @@ internal sealed class MfProxyEncoder : IProxyEncoder
         ProxyGenerationItem? progressItem, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        ValidateInputPath(inputPath);
 
         Directory.CreateDirectory(_fallbackDirectory);
         var tempFileName = string.Concat("zdp_", Guid.NewGuid().ToString("N"), ".mp4");
         var tempPath = Path.Combine(_fallbackDirectory, tempFileName);
+        ValidateTempPath(tempPath);
+
         ProxyCacheEntry? entry = null;
 
         try
@@ -157,10 +160,27 @@ internal sealed class MfProxyEncoder : IProxyEncoder
         }
     }
 
-    private static uint AlignTo16(uint value)
+    internal static uint AlignTo16(uint value)
     {
         var aligned = (value + 15u) & ~15u;
         return aligned < 16u ? 16u : aligned;
+    }
+
+    private static void ValidateInputPath(string inputPath)
+    {
+        if (string.IsNullOrEmpty(inputPath) || !Path.IsPathFullyQualified(inputPath))
+            throw new ArgumentException("Input path must be a fully qualified absolute path.", nameof(inputPath));
+    }
+
+    private void ValidateTempPath(string tempPath)
+    {
+        var fullTemp = Path.GetFullPath(tempPath);
+        var fullDir = Path.GetFullPath(_fallbackDirectory);
+        Span<char> dirWithSep = stackalloc char[fullDir.Length + 1];
+        fullDir.AsSpan().CopyTo(dirWithSep);
+        dirWithSep[fullDir.Length] = Path.DirectorySeparatorChar;
+        if (!fullTemp.AsSpan().StartsWith(dirWithSep, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Temporary path is outside the designated fallback directory.");
     }
 
     private static void TryDeleteFile(string path)

@@ -30,7 +30,17 @@ internal sealed class ProxyCacheManager : IDisposable
     }
 
     private static string MakeCacheKey(string path, float scale)
-        => $"{GetFullPath(path)}|{scale.ToString("F3", CultureInfo.InvariantCulture)}";
+    {
+        var fullPath = GetFullPath(path);
+        Span<char> scaleBuf = stackalloc char[16];
+        scale.TryFormat(scaleBuf, out int scaleLen, "F3", CultureInfo.InvariantCulture);
+        return string.Create(fullPath.Length + 1 + scaleLen, (fullPath, scale, scaleLen), static (span, state) =>
+        {
+            state.fullPath.AsSpan().CopyTo(span);
+            span[state.fullPath.Length] = '|';
+            state.scale.TryFormat(span[(state.fullPath.Length + 1)..], out _, "F3", CultureInfo.InvariantCulture);
+        });
+    }
 
     private static string GetFullPath(string path)
     {
@@ -62,9 +72,6 @@ internal sealed class ProxyCacheManager : IDisposable
         if (_cache.TryGetValue(key, out var existing) && existing.IsValid)
             return;
 
-        if (_pendingGenerations.ContainsKey(key))
-            return;
-
         var cts = new CancellationTokenSource();
         if (!_pendingGenerations.TryAdd(key, cts))
         {
@@ -79,6 +86,8 @@ internal sealed class ProxyCacheManager : IDisposable
     {
         var progressItem = new ProxyGenerationItem(originalPath);
         DispatchInvoke(() => ActiveGenerations.Add(progressItem));
+
+        int delayMs = 2000;
 
         try
         {
@@ -104,23 +113,19 @@ internal sealed class ProxyCacheManager : IDisposable
             });
 
             ProxyCompleted?.Invoke(originalPath, stored);
-
-            await Task.Delay(2000, CancellationToken.None);
-            DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
         }
         catch (OperationCanceledException)
         {
+            delayMs = 3000;
             DispatchInvoke(() =>
             {
                 progressItem.StatusMessage = Translate.ProxyGenerationStatusCanceled;
                 progressItem.IsFailed = true;
             });
-
-            await Task.Delay(3000, CancellationToken.None);
-            DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
         }
         catch (Exception ex)
         {
+            delayMs = 8000;
             var msg = ex.Message;
             Debug.WriteLine(string.Concat("[ZeroDiskProxy] Proxy generation failed for ", originalPath, ": ", ex));
             DispatchInvoke(() =>
@@ -128,15 +133,15 @@ internal sealed class ProxyCacheManager : IDisposable
                 progressItem.StatusMessage = string.Concat(Translate.ProxyGenerationStatusFailedPrefix, msg);
                 progressItem.IsFailed = true;
             });
-
-            await Task.Delay(8000, CancellationToken.None);
-            DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
         }
         finally
         {
             _pendingGenerations.TryRemove(key, out _);
             cts.Dispose();
         }
+
+        await Task.Delay(delayMs, CancellationToken.None);
+        DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
     }
 
     private static void DispatchInvoke(Action action)
