@@ -1,4 +1,5 @@
 using YukkuriMovieMaker.Commons;
+using ZeroDiskProxy.Localization;
 
 namespace ZeroDiskProxy.Progress;
 
@@ -49,7 +50,7 @@ public sealed class ProxyGenerationItem : Bindable
         set => Set(ref _isFailed, value);
     }
 
-    private string _statusMessage = "生成中...";
+    private string _statusMessage = Translate.ProxyGenerationStatusGenerating;
     public string StatusMessage
     {
         get => _statusMessage;
@@ -67,7 +68,7 @@ public sealed class ProxyGenerationItem : Bindable
         }
     }
 
-    public string StorageText => _isInMemory ? "メモリ" : "ディスク";
+    public string StorageText => _isInMemory ? Translate.StorageMemory : Translate.StorageDisk;
 
     internal ProxyGenerationItem(string originalPath)
     {

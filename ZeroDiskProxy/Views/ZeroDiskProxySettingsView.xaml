@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:settings="clr-namespace:ZeroDiskProxy.Settings"
              xmlns:views="clr-namespace:ZeroDiskProxy.Views"
+             xmlns:local="clr-namespace:ZeroDiskProxy.Localization"
              xmlns:c="clr-namespace:YukkuriMovieMaker.Controls;assembly=YukkuriMovieMaker.Controls"
              mc:Ignorable="d" d:DesignHeight="900" d:DesignWidth="600">
     <UserControl.Resources>
@@ -107,7 +108,7 @@
                 <Grid>
                     <StackPanel>
                         <TextBlock Text="ZeroDiskProxy" FontSize="15" FontWeight="Bold"/>
-                        <TextBlock Text="メモリベースのプロキシ動画で編集を高速化" FontSize="10"
+                        <TextBlock Text="{x:Static local:Translate.SettingsCardDescription}" FontSize="10"
                                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" Margin="0,2,0,0"/>
                     </StackPanel>
                     <TextBlock x:Name="VersionText" Text="" FontSize="10"
@@ -116,14 +117,14 @@
                 </Grid>
             </Border>
 
-            <Expander Header="基本設定" IsExpanded="True">
+            <Expander Header="{x:Static local:Translate.SectionBasicSettingsHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
-                    <TextBlock Text="プロキシ動画の基本的な動作を設定します" Style="{StaticResource SectionDesc}"/>
+                    <TextBlock Text="{x:Static local:Translate.SectionBasicSettingsDescription}" Style="{StaticResource SectionDesc}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="プロキシを使用する" Style="{StaticResource SettingLabel}"
-                                   ToolTip="編集中にメモリ上の低解像度プロキシ動画を使用します。&#10;出力時は自動でオリジナルに切り替わります。"/>
+                            <Label Content="{x:Static local:Translate.SettingUseProxyLabel}" Style="{StaticResource SettingLabel}"
+                                   ToolTip="{x:Static local:Translate.SettingUseProxyTooltip}"/>
                         </StackPanel>
                         <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=UseProxy}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
@@ -131,7 +132,7 @@
                     <Border Style="{StaticResource Divider}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="解像度スケール" Style="{StaticResource SettingLabel}" ToolTip="プロキシ動画の解像度倍率"/>
+                        <Label Content="{x:Static local:Translate.SettingResolutionScaleLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingResolutionScaleTooltip}"/>
                         <c:TextBoxSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=Scale}"
                                          Min="10" Max="100" DefaultMin="25" DefaultMax="75" Delta="5"
                                          StringFormat="F0" Unit="%"
@@ -142,7 +143,7 @@
 
                     <Grid Style="{StaticResource SettingRow}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="最小ファイルサイズ" Style="{StaticResource SettingLabel}" ToolTip="このサイズ以上の動画のみプロキシを生成します"/>
+                            <Label Content="{x:Static local:Translate.SettingMinFileSizeLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingMinFileSizeTooltip}"/>
                         </StackPanel>
                         <c:TextBoxSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=MinFileSizeForProxy}"
                                          Min="1" Max="2000" DefaultMin="10" DefaultMax="500" Delta="10"
@@ -152,13 +153,13 @@
                 </StackPanel>
             </Expander>
 
-            <Expander Header="品質設定" IsExpanded="True">
+            <Expander Header="{x:Static local:Translate.SectionQualitySettingsHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
-                    <TextBlock Text="エンコード品質とパフォーマンスのバランスを調整します" Style="{StaticResource SectionDesc}"/>
+                    <TextBlock Text="{x:Static local:Translate.SectionQualitySettingsDescription}" Style="{StaticResource SectionDesc}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="ビットレート係数" Style="{StaticResource SettingLabel}" ToolTip="高いほど高品質ですがメモリ使用量が増えます"/>
+                            <Label Content="{x:Static local:Translate.SettingBitrateFactorLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingBitrateFactorTooltip}"/>
                         </StackPanel>
                         <c:TextBoxSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=BitrateFactor}"
                                          Min="1" Max="200" DefaultMin="20" DefaultMax="100" Delta="5"
@@ -169,7 +170,7 @@
                     <Border Style="{StaticResource Divider}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="GOPサイズ" Style="{StaticResource SettingLabel}" ToolTip="キーフレーム間隔"/>
+                        <Label Content="{x:Static local:Translate.SettingGopSizeLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingGopSizeTooltip}"/>
                         <c:TextBoxSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=GopSize}"
                                          Min="1" Max="300" DefaultMin="15" DefaultMax="60" Delta="1"
                                          StringFormat="F0" Unit=""
@@ -178,13 +179,13 @@
                 </StackPanel>
             </Expander>
 
-            <Expander Header="メモリ設定" IsExpanded="True">
+            <Expander Header="{x:Static local:Translate.SectionMemorySettingsHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
-                    <TextBlock Text="メモリ使用量とディスクフォールバックを制御します" Style="{StaticResource SectionDesc}"/>
+                    <TextBlock Text="{x:Static local:Translate.SectionMemorySettingsDescription}" Style="{StaticResource SectionDesc}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="メモリ予約量" Style="{StaticResource SettingLabel}" ToolTip="これを下回るとディスクにフォールバックします"/>
+                            <Label Content="{x:Static local:Translate.SettingMemoryReserveLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingMemoryReserveTooltip}"/>
                         </StackPanel>
                         <c:TextBoxSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=MemoryReserveMb}"
                                          Min="128" Max="8192" DefaultMin="256" DefaultMax="2048" Delta="128"
@@ -195,7 +196,7 @@
                     <Border Style="{StaticResource Divider}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="最大キャッシュメモリ" Style="{StaticResource SettingLabel}"/>
+                        <Label Content="{x:Static local:Translate.SettingMaxCacheMemoryLabel}" Style="{StaticResource SettingLabel}"/>
                         <c:TextBoxSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=MaxCacheMemoryMb}"
                                          Min="256" Max="16384" DefaultMin="512" DefaultMax="4096" Delta="256"
                                          StringFormat="F0" Unit="MB"
@@ -206,33 +207,33 @@
 
                     <Grid Style="{StaticResource SettingRow}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="ディスクフォールバック" Style="{StaticResource SettingLabel}" ToolTip="メモリ不足時にディスクに一時ファイルを作成します"/>
+                            <Label Content="{x:Static local:Translate.SettingDiskFallbackLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingDiskFallbackTooltip}"/>
                         </StackPanel>
                         <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=EnableDiskFallback}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
                 </StackPanel>
             </Expander>
 
-            <Expander Header="自動化設定" IsExpanded="True">
+            <Expander Header="{x:Static local:Translate.SectionAutomationSettingsHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
                     <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="自動生成" Style="{StaticResource SettingLabel}"/>
+                        <Label Content="{x:Static local:Translate.SettingAutoGenerateLabel}" Style="{StaticResource SettingLabel}"/>
                         <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=AutoGenerate}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
 
                     <Border Style="{StaticResource Divider}"/>
 
                     <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="終了時にキャッシュクリア" Style="{StaticResource SettingLabel}"/>
+                        <Label Content="{x:Static local:Translate.SettingClearCacheOnExitLabel}" Style="{StaticResource SettingLabel}"/>
                         <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=ClearCacheOnExit}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
                 </StackPanel>
             </Expander>
 
-            <Expander Header="詳細設定" IsExpanded="False">
+            <Expander Header="{x:Static local:Translate.SectionAdvancedSettingsHeader}" IsExpanded="False">
                 <StackPanel Margin="4,4,4,0">
                     <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="詳細設定を有効にする" Style="{StaticResource SettingLabel}"/>
+                        <Label Content="{x:Static local:Translate.SettingEnableAdvancedLabel}" Style="{StaticResource SettingLabel}"/>
                         <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=UseAdvancedSetting}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
 
@@ -251,7 +252,7 @@
                         <Border Style="{StaticResource Divider}"/>
 
                         <Grid Style="{StaticResource SettingRow}">
-                            <Label Content="ハードウェアアクセラレーション" Style="{StaticResource SettingLabel}"/>
+                            <Label Content="{x:Static local:Translate.SettingHardwareAccelerationLabel}" Style="{StaticResource SettingLabel}"/>
                             <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=EnableHardwareAcceleration}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
 
@@ -259,7 +260,7 @@
 
                         <Grid Style="{StaticResource SettingRow}">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Label Content="使用CPUコア数" Style="{StaticResource SettingLabel}" ToolTip="0=自動"/>
+                                <Label Content="{x:Static local:Translate.SettingCpuCoreCountLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingCpuCoreCountTooltip}"/>
                             </StackPanel>
                             <c:TextBoxSlider x:Name="CpuCoreSlider"
                                              Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=CpuCoreCount}"
@@ -271,20 +272,20 @@
                 </StackPanel>
             </Expander>
 
-            <Expander Header="キャッシュ管理" IsExpanded="True">
+            <Expander Header="{x:Static local:Translate.SectionCacheManagementHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
                     <TextBlock Text="{Binding CacheSummaryText}" FontSize="12" Margin="0,0,0,4" TextWrapping="Wrap"/>
                     <TextBlock Text="{Binding MemoryUsageText}" FontSize="10"
                                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
                     <WrapPanel Margin="0,0,0,8">
-                        <Button Content="情報を更新" Command="{Binding RefreshCacheInfoCommand}" Width="140" Margin="0,0,8,0"/>
-                        <Button Content="キャッシュをクリア" Command="{Binding ClearCacheCommand}" Width="140"/>
+                        <Button Content="{x:Static local:Translate.ButtonRefreshInfo}" Command="{Binding RefreshCacheInfoCommand}" Width="140" Margin="0,0,8,0"/>
+                        <Button Content="{x:Static local:Translate.ButtonClearCache}" Command="{Binding ClearCacheCommand}" Width="140"/>
                     </WrapPanel>
 
                     <Border Style="{StaticResource Divider}" Margin="0,0,0,4"/>
 
-                    <TextBlock Text="キャッシュ一覧" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,4"/>
+                    <TextBlock Text="{x:Static local:Translate.CacheListHeader}" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,4"/>
 
                     <ScrollViewer MaxHeight="250" VerticalScrollBarVisibility="Auto" Style="{StaticResource ThinScrollViewer}">
                         <Grid>
@@ -323,7 +324,7 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Text="キャッシュはありません" FontSize="11"
+                            <TextBlock Text="{x:Static local:Translate.CacheListEmpty}" FontSize="11"
                                        Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
                                        HorizontalAlignment="Center" Margin="0,8"
                                        Visibility="{Binding HasCacheEntries, Converter={StaticResource InvertBoolToVis}}"/>

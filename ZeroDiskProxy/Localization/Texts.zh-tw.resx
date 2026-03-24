@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+<data name="CurrentCulture" xml:space="preserve"><value>zh-tw</value></data>
+<data name="AppName" xml:space="preserve"><value>ZeroDiskProxy</value></data>
+<data name="SettingsName" xml:space="preserve"><value>ZeroDiskProxy 設定</value></data>
+<data name="StorageMemory" xml:space="preserve"><value>記憶體</value></data>
+<data name="StorageDisk" xml:space="preserve"><value>磁碟</value></data>
+<data name="ProxyGenerationStatusGenerating" xml:space="preserve"><value>正在產生...</value></data>
+<data name="ProxyGenerationStatusCompleted" xml:space="preserve"><value>完成</value></data>
+<data name="ProxyGenerationStatusCanceled" xml:space="preserve"><value>已取消</value></data>
+<data name="ProxyGenerationStatusFailedPrefix" xml:space="preserve"><value>失敗:</value></data>
+<data name="CacheSummaryLoading" xml:space="preserve"><value>載入中...</value></data>
+<data name="CacheNoEntriesToDelete" xml:space="preserve"><value>沒有可刪除的快取。</value></data>
+<data name="CacheDeleteSummaryFormat" xml:space="preserve"><value>已刪除 {0} 項（{1}）。</value></data>
+<data name="CacheSummaryPluginNotInitialized" xml:space="preserve"><value>外掛未初始化</value></data>
+<data name="CacheSummaryCountFormat" xml:space="preserve"><value>快取數: {0} 項</value></data>
+<data name="CacheUsageMemoryAndDiskFormat" xml:space="preserve"><value>記憶體: {0} 項（{1}）   磁碟: {2} 項（{3}）</value></data>
+<data name="CacheUsageAllocatedFormat" xml:space="preserve"><value>已配置: {0}</value></data>
+<data name="GenerationPopupWindowTitle" xml:space="preserve"><value>ZeroDiskProxy - 正在產生代理</value></data>
+<data name="GenerationPopupHeader" xml:space="preserve"><value>正在產生代理影片...</value></data>
+<data name="GenerationPopupNoActiveItems" xml:space="preserve"><value>目前沒有正在產生的代理。</value></data>
+<data name="SettingsCardDescription" xml:space="preserve"><value>透過記憶體式代理影片加速編輯</value></data>
+<data name="SectionBasicSettingsHeader" xml:space="preserve"><value>基本設定</value></data>
+<data name="SectionBasicSettingsDescription" xml:space="preserve"><value>設定代理影片的基本行為</value></data>
+<data name="SettingUseProxyLabel" xml:space="preserve"><value>使用代理</value></data>
+<data name="SettingUseProxyTooltip" xml:space="preserve"><value>編輯時使用記憶體中的低解析度代理影片。&amp;#10;輸出時會自動切換為原始影片。</value></data>
+<data name="SettingResolutionScaleLabel" xml:space="preserve"><value>解析度縮放</value></data>
+<data name="SettingResolutionScaleTooltip" xml:space="preserve"><value>代理影片的解析度倍率</value></data>
+<data name="SettingMinFileSizeLabel" xml:space="preserve"><value>最小檔案大小</value></data>
+<data name="SettingMinFileSizeTooltip" xml:space="preserve"><value>僅為大於此大小的影片產生代理</value></data>
+<data name="SectionQualitySettingsHeader" xml:space="preserve"><value>品質設定</value></data>
+<data name="SectionQualitySettingsDescription" xml:space="preserve"><value>調整編碼品質與效能之間的平衡</value></data>
+<data name="SettingBitrateFactorLabel" xml:space="preserve"><value>位元率係數</value></data>
+<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>值越高畫質越好但記憶體用量越大</value></data>
+<data name="SettingGopSizeLabel" xml:space="preserve"><value>GOP 大小</value></data>
+<data name="SettingGopSizeTooltip" xml:space="preserve"><value>關鍵影格間隔</value></data>
+<data name="SectionMemorySettingsHeader" xml:space="preserve"><value>記憶體設定</value></data>
+<data name="SectionMemorySettingsDescription" xml:space="preserve"><value>控制記憶體使用量與磁碟回退</value></data>
+<data name="SettingMemoryReserveLabel" xml:space="preserve"><value>記憶體保留量</value></data>
+<data name="SettingMemoryReserveTooltip" xml:space="preserve"><value>記憶體低於此值時回退到磁碟</value></data>
+<data name="SettingMaxCacheMemoryLabel" xml:space="preserve"><value>最大快取記憶體</value></data>
+<data name="SettingDiskFallbackLabel" xml:space="preserve"><value>磁碟回退</value></data>
+<data name="SettingDiskFallbackTooltip" xml:space="preserve"><value>記憶體不足時在磁碟建立暫存檔</value></data>
+<data name="SectionAutomationSettingsHeader" xml:space="preserve"><value>自動化設定</value></data>
+<data name="SettingAutoGenerateLabel" xml:space="preserve"><value>自動產生</value></data>
+<data name="SettingClearCacheOnExitLabel" xml:space="preserve"><value>結束時清除快取</value></data>
+<data name="SectionAdvancedSettingsHeader" xml:space="preserve"><value>進階設定</value></data>
+<data name="SettingEnableAdvancedLabel" xml:space="preserve"><value>啟用進階設定</value></data>
+<data name="SettingHardwareAccelerationLabel" xml:space="preserve"><value>硬體加速</value></data>
+<data name="SettingCpuCoreCountLabel" xml:space="preserve"><value>使用 CPU 核心數</value></data>
+<data name="SettingCpuCoreCountTooltip" xml:space="preserve"><value>0=自動</value></data>
+<data name="SectionCacheManagementHeader" xml:space="preserve"><value>快取管理</value></data>
+<data name="ButtonRefreshInfo" xml:space="preserve"><value>更新資訊</value></data>
+<data name="ButtonClearCache" xml:space="preserve"><value>清除快取</value></data>
+<data name="CacheListHeader" xml:space="preserve"><value>快取清單</value></data>
+<data name="CacheListEmpty" xml:space="preserve"><value>沒有快取。</value></data>
+</root>

@@ -2,13 +2,14 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using YukkuriMovieMaker.Commons;
 using ZeroDiskProxy.Core;
+using ZeroDiskProxy.Localization;
 using ZeroDiskProxy.Plugin;
 
 namespace ZeroDiskProxy.ViewModels;
 
 internal sealed class SettingsViewModel : Bindable
 {
-    private string _cacheSummaryText = "読み込み中...";
+    private string _cacheSummaryText = Translate.CacheSummaryLoading;
     public string CacheSummaryText
     {
         get => _cacheSummaryText;
@@ -53,16 +54,19 @@ internal sealed class SettingsViewModel : Bindable
         if (count == 0)
         {
             System.Windows.MessageBox.Show(
-                "削除するキャッシュがありません。",
-                "ZeroDiskProxy",
+                Translate.CacheNoEntriesToDelete,
+                Translate.AppName,
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
         }
         else
         {
             System.Windows.MessageBox.Show(
-                string.Concat(count.ToString("N0"), " 件 (", FormatBytes(totalSize), ") を削除しました。"),
-                "ZeroDiskProxy",
+                string.Format(
+                    Translate.CacheDeleteSummaryFormat,
+                    count.ToString("N0"),
+                    FormatBytes(totalSize)),
+                Translate.AppName,
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
         }
@@ -75,22 +79,27 @@ internal sealed class SettingsViewModel : Bindable
         var manager = PluginHost.Instance?.CacheManager;
         if (manager is null)
         {
-            CacheSummaryText = "プラグイン未初期化";
+            CacheSummaryText = Translate.CacheSummaryPluginNotInitialized;
             MemoryUsageText = "";
             HasCacheEntries = false;
             return;
         }
 
         var (count, memSize, diskSize, memCount, diskCount) = manager.GetCacheInfo();
-        CacheSummaryText = string.Concat("キャッシュ数: ", count.ToString("N0"), " 件");
+        CacheSummaryText = string.Format(Translate.CacheSummaryCountFormat, count.ToString("N0"));
 
-        var usageText = string.Concat(
-            "メモリ: ", memCount.ToString("N0"), " 件 (", FormatBytes(memSize),
-            ")   ディスク: ", diskCount.ToString("N0"), " 件 (", FormatBytes(diskSize), ")");
+        var usageText = string.Format(
+            Translate.CacheUsageMemoryAndDiskFormat,
+            memCount.ToString("N0"),
+            FormatBytes(memSize),
+            diskCount.ToString("N0"),
+            FormatBytes(diskSize));
 
         var budget = PluginHost.Instance?.Budget;
         if (budget is not null)
-            usageText = string.Concat(usageText, "   割当済: ", FormatBytes(budget.AllocatedBytes));
+            usageText = string.Concat(
+                usageText,
+                string.Format(Translate.CacheUsageAllocatedFormat, FormatBytes(budget.AllocatedBytes)));
 
         MemoryUsageText = usageText;
 
@@ -153,7 +162,7 @@ internal sealed class CacheEntryViewModel : Bindable
         Scale = snapshot.Scale;
         Resolution = string.Concat(snapshot.ProxyWidth.ToString(), "×", snapshot.ProxyHeight.ToString());
         IsInMemory = snapshot.IsInMemory;
-        StorageType = snapshot.IsInMemory ? "メモリ" : "ディスク";
+        StorageType = snapshot.IsInMemory ? Translate.StorageMemory : Translate.StorageDisk;
         DataSize = snapshot.DataSize;
         DataSizeText = FormatBytes(snapshot.DataSize);
         CreatedAtText = snapshot.CreatedAt.ToLocalTime().ToString("HH:mm:ss");

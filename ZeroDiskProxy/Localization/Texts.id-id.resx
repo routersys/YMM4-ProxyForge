@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+<data name="CurrentCulture" xml:space="preserve"><value>id-id</value></data>
+<data name="AppName" xml:space="preserve"><value>ZeroDiskProxy</value></data>
+<data name="SettingsName" xml:space="preserve"><value>Pengaturan ZeroDiskProxy</value></data>
+<data name="StorageMemory" xml:space="preserve"><value>Memori</value></data>
+<data name="StorageDisk" xml:space="preserve"><value>Disk</value></data>
+<data name="ProxyGenerationStatusGenerating" xml:space="preserve"><value>Sedang membuat...</value></data>
+<data name="ProxyGenerationStatusCompleted" xml:space="preserve"><value>Selesai</value></data>
+<data name="ProxyGenerationStatusCanceled" xml:space="preserve"><value>Dibatalkan</value></data>
+<data name="ProxyGenerationStatusFailedPrefix" xml:space="preserve"><value>Gagal:</value></data>
+<data name="CacheSummaryLoading" xml:space="preserve"><value>Memuat...</value></data>
+<data name="CacheNoEntriesToDelete" xml:space="preserve"><value>Tidak ada cache untuk dihapus.</value></data>
+<data name="CacheDeleteSummaryFormat" xml:space="preserve"><value>{0} item ({1}) telah dihapus.</value></data>
+<data name="CacheSummaryPluginNotInitialized" xml:space="preserve"><value>Plugin belum diinisialisasi</value></data>
+<data name="CacheSummaryCountFormat" xml:space="preserve"><value>Jumlah cache: {0} item</value></data>
+<data name="CacheUsageMemoryAndDiskFormat" xml:space="preserve"><value>Memori: {0} item ({1})   Disk: {2} item ({3})</value></data>
+<data name="CacheUsageAllocatedFormat" xml:space="preserve"><value>Dialokasikan: {0}</value></data>
+<data name="GenerationPopupWindowTitle" xml:space="preserve"><value>ZeroDiskProxy - Sedang Membuat Proksi</value></data>
+<data name="GenerationPopupHeader" xml:space="preserve"><value>Sedang membuat video proksi...</value></data>
+<data name="GenerationPopupNoActiveItems" xml:space="preserve"><value>Tidak ada proksi yang sedang dibuat.</value></data>
+<data name="SettingsCardDescription" xml:space="preserve"><value>Tingkatkan kecepatan edit dengan video proksi berbasis memori</value></data>
+<data name="SectionBasicSettingsHeader" xml:space="preserve"><value>Pengaturan Dasar</value></data>
+<data name="SectionBasicSettingsDescription" xml:space="preserve"><value>Atur perilaku dasar video proksi</value></data>
+<data name="SettingUseProxyLabel" xml:space="preserve"><value>Gunakan proksi</value></data>
+<data name="SettingUseProxyTooltip" xml:space="preserve"><value>Gunakan video proksi resolusi rendah di memori saat mengedit.&amp;#10;Akan otomatis beralih ke video asli saat ekspor.</value></data>
+<data name="SettingResolutionScaleLabel" xml:space="preserve"><value>Skala Resolusi</value></data>
+<data name="SettingResolutionScaleTooltip" xml:space="preserve"><value>Faktor skala resolusi untuk video proksi</value></data>
+<data name="SettingMinFileSizeLabel" xml:space="preserve"><value>Ukuran File Minimum</value></data>
+<data name="SettingMinFileSizeTooltip" xml:space="preserve"><value>Buat proksi hanya untuk video yang lebih besar dari ukuran ini</value></data>
+<data name="SectionQualitySettingsHeader" xml:space="preserve"><value>Pengaturan Kualitas</value></data>
+<data name="SectionQualitySettingsDescription" xml:space="preserve"><value>Sesuaikan keseimbangan antara kualitas encoding dan performa</value></data>
+<data name="SettingBitrateFactorLabel" xml:space="preserve"><value>Faktor Bitrate</value></data>
+<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>Nilai lebih tinggi memberi kualitas lebih baik tetapi memakai lebih banyak memori</value></data>
+<data name="SettingGopSizeLabel" xml:space="preserve"><value>Ukuran GOP</value></data>
+<data name="SettingGopSizeTooltip" xml:space="preserve"><value>Interval keyframe</value></data>
+<data name="SectionMemorySettingsHeader" xml:space="preserve"><value>Pengaturan Memori</value></data>
+<data name="SectionMemorySettingsDescription" xml:space="preserve"><value>Kendalikan penggunaan memori dan fallback ke disk</value></data>
+<data name="SettingMemoryReserveLabel" xml:space="preserve"><value>Cadangan Memori</value></data>
+<data name="SettingMemoryReserveTooltip" xml:space="preserve"><value>Akan fallback ke disk saat memori turun di bawah nilai ini</value></data>
+<data name="SettingMaxCacheMemoryLabel" xml:space="preserve"><value>Maksimum Memori Cache</value></data>
+<data name="SettingDiskFallbackLabel" xml:space="preserve"><value>Fallback Disk</value></data>
+<data name="SettingDiskFallbackTooltip" xml:space="preserve"><value>Buat file sementara di disk saat memori tidak cukup</value></data>
+<data name="SectionAutomationSettingsHeader" xml:space="preserve"><value>Pengaturan Otomatisasi</value></data>
+<data name="SettingAutoGenerateLabel" xml:space="preserve"><value>Buat Otomatis</value></data>
+<data name="SettingClearCacheOnExitLabel" xml:space="preserve"><value>Hapus Cache saat Keluar</value></data>
+<data name="SectionAdvancedSettingsHeader" xml:space="preserve"><value>Pengaturan Lanjutan</value></data>
+<data name="SettingEnableAdvancedLabel" xml:space="preserve"><value>Aktifkan Pengaturan Lanjutan</value></data>
+<data name="SettingHardwareAccelerationLabel" xml:space="preserve"><value>Akselerasi Perangkat Keras</value></data>
+<data name="SettingCpuCoreCountLabel" xml:space="preserve"><value>Jumlah Core CPU</value></data>
+<data name="SettingCpuCoreCountTooltip" xml:space="preserve"><value>0=Otomatis</value></data>
+<data name="SectionCacheManagementHeader" xml:space="preserve"><value>Manajemen Cache</value></data>
+<data name="ButtonRefreshInfo" xml:space="preserve"><value>Perbarui Info</value></data>
+<data name="ButtonClearCache" xml:space="preserve"><value>Hapus Cache</value></data>
+<data name="CacheListHeader" xml:space="preserve"><value>Daftar Cache</value></data>
+<data name="CacheListEmpty" xml:space="preserve"><value>Tidak ada cache.</value></data>
+</root>

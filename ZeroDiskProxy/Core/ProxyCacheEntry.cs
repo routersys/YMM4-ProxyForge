@@ -136,4 +136,5 @@ internal readonly record struct CacheEntrySnapshot(
     bool IsInMemory,
     long DataSize,
     DateTime CreatedAt,
-    DateTime LastAccessedAt);
+    DateTime LastAccessedAt
+);

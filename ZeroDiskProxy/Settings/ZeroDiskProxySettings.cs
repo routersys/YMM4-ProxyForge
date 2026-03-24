@@ -1,12 +1,13 @@
 using System.Text.Json.Serialization;
 using YukkuriMovieMaker.Plugin;
+using ZeroDiskProxy.Localization;
 
 namespace ZeroDiskProxy.Settings;
 
 internal sealed class ZeroDiskProxySettings : SettingsBase<ZeroDiskProxySettings>
 {
     public override SettingsCategory Category => SettingsCategory.VideoFileSource;
-    public override string Name => "ZeroDiskProxy 設定";
+    public override string Name => Translate.SettingsName;
     public override bool HasSettingView => true;
     public override object? SettingView => new Views.ZeroDiskProxySettingsView();
 

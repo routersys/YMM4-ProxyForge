@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using ZeroDiskProxy.Localization;
 using ZeroDiskProxy.Memory;
 using ZeroDiskProxy.Progress;
 using ZeroDiskProxy.Settings;
@@ -93,7 +94,7 @@ internal sealed class ProxyCacheManager : IDisposable
                 var (pi, inMem) = ((ProxyGenerationItem, bool))state;
                 pi.Progress = 100;
                 pi.IsCompleted = true;
-                pi.StatusMessage = "完了";
+                pi.StatusMessage = Translate.ProxyGenerationStatusCompleted;
                 pi.IsInMemory = inMem;
             }, (progressItem, entry.IsInMemory));
 
@@ -111,7 +112,7 @@ internal sealed class ProxyCacheManager : IDisposable
             DispatchInvoke(static state =>
             {
                 var pi = (ProxyGenerationItem)state;
-                pi.StatusMessage = "キャンセル";
+                pi.StatusMessage = Translate.ProxyGenerationStatusCanceled;
                 pi.IsFailed = true;
             }, progressItem);
 
@@ -128,7 +129,7 @@ internal sealed class ProxyCacheManager : IDisposable
             DispatchInvoke(static state =>
             {
                 var (pi, m) = ((ProxyGenerationItem, string))state;
-                pi.StatusMessage = string.Concat("失敗: ", m);
+                pi.StatusMessage = string.Concat(Translate.ProxyGenerationStatusFailedPrefix, m);
                 pi.IsFailed = true;
             }, (progressItem, msg));
 
