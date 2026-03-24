@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Interop;
 using YukkuriMovieMaker.Commons;
 using ZeroDiskProxy.Core;
+using ZeroDiskProxy.Detection;
+using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Memory;
 using ZeroDiskProxy.Resource;
 using ZeroDiskProxy.Settings;
@@ -22,20 +24,34 @@ internal sealed class PluginHost : IDisposable
     internal ResourceRegistry Resources { get; }
     internal MemoryBudget Budget { get; }
     internal ProxyCacheManager CacheManager { get; }
+    internal IExportDetector ExportDetector { get; }
     internal string FallbackDirectory { get; }
 
-    private PluginHost()
+    private PluginHost(
+        ResourceRegistry resources,
+        MemoryBudget budget,
+        IProxyEncoderFactory encoderFactory,
+        IExportDetector exportDetector,
+        string fallbackDirectory)
     {
-        var settings = ZeroDiskProxySettings.Default;
-        Resources = new ResourceRegistry();
-        Budget = new MemoryBudget(settings.MemoryReserveMb);
-        FallbackDirectory = Path.Combine(AppDirectories.TemporaryDirectory, "ZeroDiskProxyTemp");
-
-        CacheManager = new ProxyCacheManager(
-            () => new MfProxyEncoder(Budget, FallbackDirectory),
-            Budget);
+        Resources = resources;
+        Budget = budget;
+        ExportDetector = exportDetector;
+        FallbackDirectory = fallbackDirectory;
+        CacheManager = new ProxyCacheManager(encoderFactory, Budget);
 
         CacheManager.ActiveGenerations.CollectionChanged += OnGenerationsChanged;
+    }
+
+    private static PluginHost CreateDefault()
+    {
+        var settings = ZeroDiskProxySettings.Default;
+        var resources = new ResourceRegistry();
+        var budget = new MemoryBudget(settings.MemoryReserveMb);
+        var fallbackDirectory = Path.Combine(AppDirectories.TemporaryDirectory, "ZeroDiskProxyTemp");
+        IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(budget, fallbackDirectory);
+        IExportDetector exportDetector = new ExportDetector();
+        return new PluginHost(resources, budget, encoderFactory, exportDetector, fallbackDirectory);
     }
 
     internal static PluginHost EnsureInitialized()
@@ -45,7 +61,7 @@ internal sealed class PluginHost : IDisposable
 
         lock (Lock)
         {
-            _instance ??= new PluginHost();
+            _instance ??= CreateDefault();
         }
 
         return _instance;

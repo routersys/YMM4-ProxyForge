@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Localization;
 using ZeroDiskProxy.Memory;
 using ZeroDiskProxy.Progress;
@@ -15,14 +16,14 @@ internal sealed class ProxyCacheManager : IDisposable
 {
     private readonly ConcurrentDictionary<string, ProxyCacheEntry> _cache = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingGenerations = new(StringComparer.Ordinal);
-    private readonly Func<IProxyEncoder> _encoderFactory;
+    private readonly IProxyEncoderFactory _encoderFactory;
     private readonly MemoryBudget _memoryBudget;
     private int _disposed;
 
     internal ObservableCollection<ProxyGenerationItem> ActiveGenerations { get; } = [];
     internal event Action<string, ProxyCacheEntry>? ProxyCompleted;
 
-    internal ProxyCacheManager(Func<IProxyEncoder> encoderFactory, MemoryBudget memoryBudget)
+    internal ProxyCacheManager(IProxyEncoderFactory encoderFactory, MemoryBudget memoryBudget)
     {
         _encoderFactory = encoderFactory;
         _memoryBudget = memoryBudget;
@@ -82,7 +83,7 @@ internal sealed class ProxyCacheManager : IDisposable
 
         try
         {
-            using var encoder = _encoderFactory();
+            using var encoder = _encoderFactory.Create();
             var entry = await encoder.EncodeAsync(
                 originalPath, scale, settings.BitrateFactor / 100f, settings.GopSize,
                 progressItem, cts.Token);

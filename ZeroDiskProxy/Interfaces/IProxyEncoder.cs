@@ -1,6 +1,7 @@
+using ZeroDiskProxy.Core;
 using ZeroDiskProxy.Progress;
 
-namespace ZeroDiskProxy.Core;
+namespace ZeroDiskProxy.Interfaces;
 
 internal interface IProxyEncoder : IDisposable
 {

@@ -4,7 +4,6 @@ using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Plugin;
 using YukkuriMovieMaker.Plugin.FileSource;
 using ZeroDiskProxy.Core;
-using ZeroDiskProxy.Detection;
 using ZeroDiskProxy.Settings;
 
 namespace ZeroDiskProxy.Plugin;
@@ -42,7 +41,7 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
         if (!settings.UseProxy && !settings.AutoGenerate)
             return null;
 
-        if (ExportDetector.IsExporting())
+        if (host.ExportDetector.IsExporting())
             return WrapFromOther(devices, filePath);
 
         if (!IsLargeEnough(filePath, settings.MinFileSizeForProxy))

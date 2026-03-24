@@ -2,6 +2,8 @@ using System.IO;
 using Windows.Media.MediaProperties;
 using Windows.Media.Transcoding;
 using Windows.Storage;
+using ZeroDiskProxy.Interfaces;
+using ZeroDiskProxy.Interop;
 using ZeroDiskProxy.Memory;
 using ZeroDiskProxy.Progress;
 
@@ -58,6 +60,7 @@ internal sealed class MfProxyEncoder : IProxyEncoder
             profile.Video.Bitrate = Math.Max((uint)(proxyWidth * proxyHeight * fps * 0.07 * bitrateFactor), 100_000u);
             profile.Video.FrameRate.Numerator = (uint)Math.Max(1, Math.Round(fps));
             profile.Video.FrameRate.Denominator = 1;
+            profile.Video.Properties[MfGuids.MF_MT_MAX_KEYFRAME_SPACING] = (uint)Math.Max(1, gopSize);
             profile.Audio = null;
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -106,12 +109,25 @@ internal sealed class MfProxyEncoder : IProxyEncoder
             };
 
             var fileSize = new FileInfo(tempPath).Length;
-            if (_memoryBudget.CanAllocateInMemory(fileSize))
+            if (_memoryBudget.TryAllocate(fileSize))
             {
-                var data = await File.ReadAllBytesAsync(tempPath, cancellationToken);
-                _memoryBudget.RecordAllocation(data.Length);
-                entry.SetMemoryData(data);
-                TryDeleteFile(tempPath);
+                try
+                {
+                    var data = await File.ReadAllBytesAsync(tempPath, cancellationToken);
+                    var delta = data.LongLength - fileSize;
+                    if (delta > 0)
+                        _memoryBudget.RecordAllocation(delta);
+                    else if (delta < 0)
+                        _memoryBudget.RecordDeallocation(-delta);
+
+                    entry.SetMemoryData(data);
+                    TryDeleteFile(tempPath);
+                }
+                catch
+                {
+                    _memoryBudget.RecordDeallocation(fileSize);
+                    throw;
+                }
             }
             else
             {

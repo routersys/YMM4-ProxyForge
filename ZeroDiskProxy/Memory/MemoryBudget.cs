@@ -18,7 +18,37 @@ internal sealed class MemoryBudget
     {
         if (requestedBytes <= 0)
             return true;
-        return GetAvailablePhysicalMemory() - requestedBytes > _reserveBytes;
+
+        var limit = GetAvailablePhysicalMemory() - _reserveBytes;
+        if (limit <= 0)
+            return false;
+
+        var allocated = Volatile.Read(ref _allocatedBytes);
+        return allocated >= 0 && requestedBytes <= limit - allocated;
+    }
+
+    internal bool TryAllocate(long requestedBytes)
+    {
+        if (requestedBytes <= 0)
+            return true;
+
+        while (true)
+        {
+            var current = Volatile.Read(ref _allocatedBytes);
+            if (current < 0)
+                return false;
+
+            var limit = GetAvailablePhysicalMemory() - _reserveBytes;
+            if (limit <= 0)
+                return false;
+
+            var next = current + requestedBytes;
+            if (next < 0 || next > limit)
+                return false;
+
+            if (Interlocked.CompareExchange(ref _allocatedBytes, next, current) == current)
+                return true;
+        }
     }
 
     internal void RecordAllocation(long bytes)
