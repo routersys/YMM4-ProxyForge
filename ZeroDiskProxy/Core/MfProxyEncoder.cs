@@ -1,4 +1,5 @@
 using System.IO;
+using Windows.Foundation;
 using Windows.Media.MediaProperties;
 using Windows.Media.Transcoding;
 using Windows.Storage;
@@ -99,25 +100,12 @@ internal sealed class MfProxyEncoder : IProxyEncoder
 
             if (progressItem is not null)
             {
-                long lastReportedCenti = 0;
-                Action dispatchAction = progressItem.ApplyPendingProgress;
-                transcodeOp.Progress = (_, pct) =>
-                {
-                    var p = Math.Min(99.0, pct);
-                    var centi = (long)(p * 100);
-                    var prev = Volatile.Read(ref lastReportedCenti);
-                    if (centi - prev < 100 && p < 99.0)
-                        return;
-                    Volatile.Write(ref lastReportedCenti, centi);
-                    progressItem.SetPendingProgress(p);
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(
-                        System.Windows.Threading.DispatcherPriority.Background,
-                        dispatchAction);
-                };
+                var reporter = new TranscodeProgressReporter(progressItem);
+                transcodeOp.Progress = reporter.Report;
             }
 
             using var reg = cancellationToken.Register(
-                static state => ((Windows.Foundation.IAsyncOperationWithProgress<TranscodeFailureReason, double>)state!).Cancel(),
+                static state => ((IAsyncActionWithProgress<double>)state!).Cancel(),
                 transcodeOp);
             await transcodeOp;
 
@@ -221,5 +209,25 @@ internal sealed class MfProxyEncoder : IProxyEncoder
     public void Dispose()
     {
         Interlocked.Exchange(ref _disposed, 1);
+    }
+
+    private sealed class TranscodeProgressReporter(ProxyGenerationItem progressItem)
+    {
+        private readonly Action _dispatchAction = progressItem.ApplyPendingProgress;
+        private long _lastReportedCenti;
+
+        internal void Report(IAsyncActionWithProgress<double> _, double pct)
+        {
+            var p = Math.Min(99.0, pct);
+            var centi = (long)(p * 100);
+            var prev = Volatile.Read(ref _lastReportedCenti);
+            if (centi - prev < 100 && p < 99.0)
+                return;
+            Volatile.Write(ref _lastReportedCenti, centi);
+            progressItem.SetPendingProgress(p);
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                _dispatchAction);
+        }
     }
 }

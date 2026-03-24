@@ -6,7 +6,6 @@ using ZeroDiskProxy.Core;
 using ZeroDiskProxy.Detection;
 using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Memory;
-using ZeroDiskProxy.Resource;
 using ZeroDiskProxy.Settings;
 using ZeroDiskProxy.ViewModels;
 using ZeroDiskProxy.Views;
@@ -21,20 +20,17 @@ internal sealed class PluginHost : IDisposable
     private GenerationPopupView? _popupView;
 
     internal static PluginHost? Instance => _instance;
-    internal ResourceRegistry Resources { get; }
     internal MemoryBudget Budget { get; }
     internal ProxyCacheManager CacheManager { get; }
     internal IExportDetector ExportDetector { get; }
     internal string FallbackDirectory { get; }
 
     private PluginHost(
-        ResourceRegistry resources,
         MemoryBudget budget,
         IProxyEncoderFactory encoderFactory,
         IExportDetector exportDetector,
         string fallbackDirectory)
     {
-        Resources = resources;
         Budget = budget;
         ExportDetector = exportDetector;
         FallbackDirectory = fallbackDirectory;
@@ -46,7 +42,6 @@ internal sealed class PluginHost : IDisposable
     private static PluginHost CreateDefault()
     {
         var settings = ZeroDiskProxySettings.Default;
-        var resources = new ResourceRegistry();
         var budget = new MemoryBudget(settings.MemoryReserveMb, settings.MaxCacheMemoryMb);
         var fallbackDirectory = Path.Combine(AppDirectories.TemporaryDirectory, "ZeroDiskProxyTemp");
         IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
@@ -56,7 +51,7 @@ internal sealed class PluginHost : IDisposable
                 ZeroDiskProxySettings.Default.EnableHardwareAcceleration,
                 ZeroDiskProxySettings.Default.EnableDiskFallback));
         IExportDetector exportDetector = new ExportDetector();
-        return new PluginHost(resources, budget, encoderFactory, exportDetector, fallbackDirectory);
+        return new PluginHost(budget, encoderFactory, exportDetector, fallbackDirectory);
     }
 
     internal static PluginHost EnsureInitialized()
@@ -103,7 +98,7 @@ internal sealed class PluginHost : IDisposable
             _popupView = new GenerationPopupView(vm);
 
             var mainWindow = Application.Current?.MainWindow;
-            if (mainWindow is not null && mainWindow.IsLoaded)
+            if (mainWindow is { IsLoaded: true })
             {
                 try
                 {
@@ -137,7 +132,6 @@ internal sealed class PluginHost : IDisposable
         });
 
         CacheManager.Dispose();
-        Resources.Dispose();
         CleanupFallbackDirectory();
     }
 

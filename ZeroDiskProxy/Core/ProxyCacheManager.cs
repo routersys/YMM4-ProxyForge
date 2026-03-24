@@ -13,25 +13,14 @@ namespace ZeroDiskProxy.Core;
 
 internal sealed class ProxyCacheManager : IDisposable
 {
-    private readonly struct CacheKey : IEquatable<CacheKey>
+    private readonly record struct CacheKey(string Path, float Scale) : IEquatable<CacheKey>
     {
-        private readonly string _path;
-        private readonly float _scale;
-
-        internal CacheKey(string path, float scale)
-        {
-            _path = path;
-            _scale = scale;
-        }
-
         public bool Equals(CacheKey other) =>
-            _scale == other._scale &&
-            string.Equals(_path, other._path, StringComparison.OrdinalIgnoreCase);
-
-        public override bool Equals(object? obj) => obj is CacheKey k && Equals(k);
+            Scale == other.Scale &&
+            string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase);
 
         public override int GetHashCode() =>
-            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(_path), _scale);
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(Path), Scale);
     }
 
     private readonly ConcurrentDictionary<CacheKey, ProxyCacheEntry> _cache = new();
@@ -179,9 +168,9 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal (int count, long totalSize) ClearAll()
     {
-        foreach (var (key, cts) in _pendingGenerations)
+        foreach (var kvp in _pendingGenerations)
         {
-            if (_pendingGenerations.TryRemove(key, out var removed))
+            if (_pendingGenerations.TryRemove(kvp.Key, out var removed))
             {
                 try { removed.Cancel(); removed.Dispose(); }
                 catch { }
@@ -190,9 +179,9 @@ internal sealed class ProxyCacheManager : IDisposable
 
         long totalSize = 0;
         int count = 0;
-        foreach (var (key, entry) in _cache)
+        foreach (var kvp in _cache)
         {
-            if (_cache.TryRemove(key, out var removed))
+            if (_cache.TryRemove(kvp.Key, out var removed))
             {
                 totalSize += removed.DataSize;
                 removed.Dispose();
@@ -206,22 +195,17 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal CacheEntrySnapshot[] GetAllSnapshots()
     {
-        var capacity = _cache.Count;
-        if (capacity == 0)
+        if (_cache.IsEmpty)
             return [];
 
-        var result = new CacheEntrySnapshot[capacity];
-        int i = 0;
+        var result = new List<CacheEntrySnapshot>();
         foreach (var entry in _cache.Values)
         {
-            if (entry.IsValid && i < result.Length)
-                result[i++] = entry.CreateSnapshot();
+            if (entry.IsValid)
+                result.Add(entry.CreateSnapshot());
         }
 
-        if (i < result.Length)
-            Array.Resize(ref result, i);
-
-        return result;
+        return result.Count > 0 ? [.. result] : [];
     }
 
     internal (int entryCount, long memSize, long diskSize, int memCount, int diskCount) GetCacheInfo()

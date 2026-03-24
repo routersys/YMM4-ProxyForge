@@ -33,7 +33,7 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
         }
     }
 
-    private IVideoFileSource? CreateCore(IGraphicsDevicesAndContext devices, string filePath)
+    private static IVideoFileSource? CreateCore(IGraphicsDevicesAndContext devices, string filePath)
     {
         var host = PluginHost.Instance;
         if (host is null)
@@ -54,7 +54,7 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
         if (settings.UseProxy)
         {
             var cached = host.CacheManager.TryGetProxy(filePath, proxyScale);
-            if (cached is not null && cached.IsValid)
+            if (cached is { IsValid: true })
                 return LoadFromCache(devices, cached, host.FallbackDirectory);
 
             host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);

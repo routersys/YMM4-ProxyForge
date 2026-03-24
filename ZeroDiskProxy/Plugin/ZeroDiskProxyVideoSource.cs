@@ -54,37 +54,7 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
     public void Update(TimeSpan time)
     {
         if (!_upgraded && _tryUpgradeSource is not null)
-        {
-            var pending = _pendingUpgrade;
-            if (pending is not null)
-            {
-                _pendingUpgrade = null;
-                lock (_gate)
-                {
-                    if (!_upgraded && Volatile.Read(ref _disposed) == 0)
-                    {
-                        (_retiredSources ??= []).Add(_inner);
-                        _inner = pending;
-                        _switchEffect.SetInput(0, pending.Output, true);
-                        _upgraded = true;
-                    }
-                    else
-                    {
-                        pending.Dispose();
-                    }
-                }
-            }
-            else
-            {
-                var now = Stopwatch.GetTimestamp();
-                if (now >= Volatile.Read(ref _nextUpgradeAttemptTicks) &&
-                    Interlocked.Exchange(ref _upgradeFetching, 1) == 0)
-                {
-                    Volatile.Write(ref _nextUpgradeAttemptTicks, now + Stopwatch.Frequency / 2);
-                    ThreadPool.UnsafeQueueUserWorkItem(static s => s.FetchUpgradeAsync(), this, preferLocal: false);
-                }
-            }
-        }
+            TryApplyUpgrade();
 
         if (_upgraded)
         {
@@ -94,7 +64,43 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
         }
 
         lock (_gate)
-            _inner.Update(time);
+        {
+            if (Volatile.Read(ref _disposed) == 0)
+                _inner.Update(time);
+        }
+    }
+
+    private void TryApplyUpgrade()
+    {
+        var pending = _pendingUpgrade;
+        if (pending is not null)
+        {
+            _pendingUpgrade = null;
+            lock (_gate)
+            {
+                if (!_upgraded && Volatile.Read(ref _disposed) == 0)
+                {
+                    (_retiredSources ??= []).Add(_inner);
+                    _inner = pending;
+                    _switchEffect.SetInput(0, pending.Output, true);
+                    _upgraded = true;
+                }
+                else
+                {
+                    pending.Dispose();
+                }
+            }
+        }
+        else
+        {
+            var now = Stopwatch.GetTimestamp();
+            if (now >= Volatile.Read(ref _nextUpgradeAttemptTicks) &&
+                Interlocked.Exchange(ref _upgradeFetching, 1) == 0)
+            {
+                Volatile.Write(ref _nextUpgradeAttemptTicks, now + Stopwatch.Frequency / 2);
+                ThreadPool.UnsafeQueueUserWorkItem(static s => s.FetchUpgradeAsync(), this, preferLocal: false);
+            }
+        }
     }
 
     private void FetchUpgradeAsync()

@@ -108,10 +108,8 @@ internal sealed class ProxyCacheEntry : IDisposable
         }
     }
 
-    internal CacheEntrySnapshot CreateSnapshot()
-    {
-        return new CacheEntrySnapshot(
-            OriginalPath,
+    internal CacheEntrySnapshot CreateSnapshot() =>
+        new(OriginalPath,
             Path.GetFileName(OriginalPath),
             Scale,
             ProxyWidth,
@@ -120,7 +118,6 @@ internal sealed class ProxyCacheEntry : IDisposable
             DataSize,
             CreatedAt,
             LastAccessedAt);
-    }
 
     private void OnStreamClosed()
     {
@@ -163,25 +160,15 @@ internal sealed class ProxyCacheEntry : IDisposable
         }
     }
 
-    private sealed class PooledMemoryStream : Stream
+    private sealed class PooledMemoryStream(byte[] buffer, int length, ProxyCacheEntry owner) : Stream
     {
-        private readonly byte[] _buffer;
-        private readonly int _length;
-        private readonly ProxyCacheEntry _owner;
         private int _position;
         private int _disposed;
 
-        internal PooledMemoryStream(byte[] buffer, int length, ProxyCacheEntry owner)
-        {
-            _buffer = buffer;
-            _length = length;
-            _owner = owner;
-        }
-
-        public override bool CanRead => _disposed == 0;
-        public override bool CanSeek => _disposed == 0;
+        public override bool CanRead => Volatile.Read(ref _disposed) == 0;
+        public override bool CanSeek => Volatile.Read(ref _disposed) == 0;
         public override bool CanWrite => false;
-        public override long Length => _length;
+        public override long Length => length;
 
         public override long Position
         {
@@ -189,38 +176,38 @@ internal sealed class ProxyCacheEntry : IDisposable
             set => _position = checked((int)value);
         }
 
-        public override int Read(byte[] buffer, int offset, int count)
+        public override int Read(byte[] destination, int offset, int count)
         {
-            var available = _length - _position;
+            var available = length - _position;
             if (available <= 0) return 0;
             var toRead = Math.Min(count, available);
-            Buffer.BlockCopy(_buffer, _position, buffer, offset, toRead);
+            Buffer.BlockCopy(buffer, _position, destination, offset, toRead);
             _position += toRead;
             return toRead;
         }
 
-        public override int Read(Span<byte> buffer)
+        public override int Read(Span<byte> destination)
         {
-            var available = _length - _position;
+            var available = length - _position;
             if (available <= 0) return 0;
-            var toRead = Math.Min(buffer.Length, available);
-            _buffer.AsSpan(_position, toRead).CopyTo(buffer);
+            var toRead = Math.Min(destination.Length, available);
+            buffer.AsSpan(_position, toRead).CopyTo(destination);
             _position += toRead;
             return toRead;
         }
 
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        public override ValueTask<int> ReadAsync(Memory<byte> destination, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
                 return ValueTask.FromCanceled<int>(cancellationToken);
-            return ValueTask.FromResult(Read(buffer.Span));
+            return ValueTask.FromResult(Read(destination.Span));
         }
 
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public override Task<int> ReadAsync(byte[] destination, int offset, int count, CancellationToken cancellationToken)
         {
             if (cancellationToken.IsCancellationRequested)
                 return Task.FromCanceled<int>(cancellationToken);
-            return Task.FromResult(Read(buffer.AsSpan(offset, count)));
+            return Task.FromResult(Read(destination.AsSpan(offset, count)));
         }
 
         public override long Seek(long offset, SeekOrigin origin)
@@ -229,10 +216,10 @@ internal sealed class ProxyCacheEntry : IDisposable
             {
                 SeekOrigin.Begin => offset,
                 SeekOrigin.Current => _position + offset,
-                SeekOrigin.End => _length + offset,
+                SeekOrigin.End => length + offset,
                 _ => throw new ArgumentOutOfRangeException(nameof(origin))
             };
-            _position = (int)Math.Clamp(newPos, 0L, (long)_length);
+            _position = (int)Math.Clamp(newPos, 0L, (long)length);
             return _position;
         }
 
@@ -241,13 +228,13 @@ internal sealed class ProxyCacheEntry : IDisposable
         public override void SetLength(long value) =>
             throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) =>
+        public override void Write(byte[] destination, int offset, int count) =>
             throw new NotSupportedException();
 
         protected override void Dispose(bool disposing)
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0 && disposing)
-                _owner.OnStreamClosed();
+                owner.OnStreamClosed();
             base.Dispose(disposing);
         }
     }

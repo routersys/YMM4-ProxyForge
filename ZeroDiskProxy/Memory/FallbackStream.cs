@@ -24,7 +24,7 @@ internal sealed class FallbackStream : Stream
 
     public override bool CanRead => _inner.CanRead;
     public override bool CanSeek => _inner.CanSeek;
-    public override bool CanWrite => !IsDisposed && _inner.CanWrite;
+    public override bool CanWrite => Volatile.Read(ref _disposed) == 0 && _inner.CanWrite;
     public override long Length => _inner.Length;
 
     public override long Position
@@ -33,10 +33,9 @@ internal sealed class FallbackStream : Stream
         set => _inner.Position = value;
     }
 
-    private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
-
     public override void Flush() => _inner.Flush();
     public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+    public override int Read(Span<byte> buffer) => _inner.Read(buffer);
     public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
     public override void SetLength(long value) => _inner.SetLength(value);
 
@@ -54,6 +53,31 @@ internal sealed class FallbackStream : Stream
                 SwitchToDiskCore();
             _inner.Write(buffer, offset, count);
         }
+    }
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        if (_isFallenBack)
+        {
+            _inner.Write(buffer);
+            return;
+        }
+
+        lock (_switchLock)
+        {
+            if (!_isFallenBack && !_budget.CanAllocateInMemory(_inner.Position + buffer.Length))
+                SwitchToDiskCore();
+            _inner.Write(buffer);
+        }
+    }
+
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (cancellationToken.IsCancellationRequested)
+            return ValueTask.FromCanceled(cancellationToken);
+
+        Write(buffer.Span);
+        return ValueTask.CompletedTask;
     }
 
     internal byte[] ToArray()

@@ -2,20 +2,14 @@ using System.Runtime.InteropServices;
 
 namespace ZeroDiskProxy.Memory;
 
-internal sealed class MemoryBudget
+internal sealed class MemoryBudget(long reserveMb, long maxCacheMb)
 {
-    private readonly long _reserveBytes;
-    private readonly long _maxCacheBytes;
+    private readonly long _reserveBytes = reserveMb * 1024L * 1024L;
+    private readonly long _maxCacheBytes = maxCacheMb * 1024L * 1024L;
     private long _allocatedBytes;
 
     private long _memoryCachePacked;
     private const long MemoryCacheIntervalMs = 100L;
-
-    internal MemoryBudget(long reserveMb, long maxCacheMb)
-    {
-        _reserveBytes = reserveMb * 1024L * 1024L;
-        _maxCacheBytes = maxCacheMb * 1024L * 1024L;
-    }
 
     internal long AllocatedBytes => Volatile.Read(ref _allocatedBytes);
 
@@ -72,13 +66,16 @@ internal sealed class MemoryBudget
     internal static long EstimateProxySize(long originalFileSize, float scale)
         => (long)(originalFileSize * scale * scale * 0.3);
 
+    private static uint WrapSafeElapsedMs(uint nowMs, uint cachedMs) =>
+        unchecked(nowMs - cachedMs);
+
     private long GetCachedAvailablePhysicalMemory()
     {
-        var nowMs = Environment.TickCount64;
+        var nowMs = (uint)Environment.TickCount64;
         var packed = Interlocked.Read(ref _memoryCachePacked);
         var cachedMs = (uint)(packed >> 32);
 
-        if ((uint)nowMs - cachedMs < (uint)MemoryCacheIntervalMs)
+        if (WrapSafeElapsedMs(nowMs, cachedMs) < (uint)MemoryCacheIntervalMs)
         {
             var memKb = (uint)packed;
             if (memKb > 0)
@@ -87,7 +84,7 @@ internal sealed class MemoryBudget
 
         var fresh = GetAvailablePhysicalMemory();
         var freshKbCapped = (uint)Math.Min(fresh >> 10, (long)uint.MaxValue);
-        Interlocked.Exchange(ref _memoryCachePacked, ((long)(uint)nowMs << 32) | freshKbCapped);
+        Interlocked.Exchange(ref _memoryCachePacked, ((long)nowMs << 32) | freshKbCapped);
         return fresh;
     }
 

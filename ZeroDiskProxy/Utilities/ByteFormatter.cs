@@ -17,15 +17,6 @@ internal static class ByteFormatter
             value /= 1024.0;
         }
 
-        Span<char> numBuf = stackalloc char[24];
-        value.TryFormat(numBuf, out int numLen, "0.##");
-        var unit = s_units[order];
-
-        return string.Create(numLen + 1 + unit.Length, (value, order), static (span, state) =>
-        {
-            state.value.TryFormat(span, out int w, "0.##");
-            span[w] = ' ';
-            s_units[state.order].AsSpan().CopyTo(span[(w + 1)..]);
-        });
+        return string.Create(null, stackalloc char[32], $"{value:0.##} {s_units[order]}");
     }
 }

@@ -25,16 +25,16 @@ public sealed class ProxyGenerationItem : Bindable
         }
     }
 
-    public string ProgressText => string.Concat(Progress.ToString("F1"), "%");
+    public string ProgressText => string.Create(null, stackalloc char[16], $"{Progress:F1}%");
 
     public string ElapsedText
     {
         get
         {
             var elapsed = DateTime.Now - StartedAt;
-            if (elapsed.TotalMinutes >= 1)
-                return string.Concat(((int)elapsed.TotalMinutes).ToString(), "m", elapsed.Seconds.ToString(), "s");
-            return string.Concat(elapsed.Seconds.ToString(), "s");
+            return elapsed.TotalMinutes >= 1
+                ? string.Create(null, stackalloc char[16], $"{(int)elapsed.TotalMinutes}m{elapsed.Seconds}s")
+                : string.Create(null, stackalloc char[8], $"{elapsed.Seconds}s");
         }
     }
 

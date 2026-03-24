@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using YukkuriMovieMaker.Resources.Localization;
 using ZeroDiskProxy.Interfaces;
@@ -51,6 +52,10 @@ internal sealed partial class ExportDetector : IExportDetector
 
     private static bool CheckExportWindow()
     {
+        Debug.Assert(
+            SynchronizationContext.Current is null || !Thread.CurrentThread.IsThreadPoolThread,
+            "CheckExportWindow relies on ThreadStatic fields and must not be called from async continuations on thread pool threads.");
+
         try
         {
             t_processId = (uint)Environment.ProcessId;

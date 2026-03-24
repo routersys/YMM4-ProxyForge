@@ -118,34 +118,19 @@ internal sealed class SettingsViewModel : Bindable
     }
 }
 
-internal sealed class CacheEntryViewModel : Bindable
+internal sealed class CacheEntryViewModel(CacheEntrySnapshot snapshot) : Bindable
 {
-    public string FileName { get; }
-    public string OriginalPath { get; }
-    public float Scale { get; }
-    public string Resolution { get; }
-    public bool IsInMemory { get; }
-    public string StorageType { get; }
-    public long DataSize { get; }
-    public string DataSizeText { get; }
-    public string CreatedAtText { get; }
-    public string LastAccessedText { get; }
-    public string ScaleText { get; }
-
-    internal CacheEntryViewModel(CacheEntrySnapshot snapshot)
-    {
-        FileName = snapshot.FileName;
-        OriginalPath = snapshot.OriginalPath;
-        Scale = snapshot.Scale;
-        Resolution = string.Concat(snapshot.ProxyWidth.ToString(), "×", snapshot.ProxyHeight.ToString());
-        IsInMemory = snapshot.IsInMemory;
-        StorageType = snapshot.IsInMemory ? Translate.StorageMemory : Translate.StorageDisk;
-        DataSize = snapshot.DataSize;
-        DataSizeText = ByteFormatter.Format(snapshot.DataSize);
-        CreatedAtText = snapshot.CreatedAt.ToLocalTime().ToString("HH:mm:ss");
-        LastAccessedText = snapshot.LastAccessedAt.ToLocalTime().ToString("HH:mm:ss");
-        ScaleText = string.Concat((snapshot.Scale * 100).ToString("F0"), "%");
-    }
+    public string FileName { get; } = snapshot.FileName;
+    public string OriginalPath { get; } = snapshot.OriginalPath;
+    public float Scale { get; } = snapshot.Scale;
+    public string Resolution { get; } = string.Create(null, stackalloc char[24], $"{snapshot.ProxyWidth}\u00d7{snapshot.ProxyHeight}");
+    public bool IsInMemory { get; } = snapshot.IsInMemory;
+    public string StorageType { get; } = snapshot.IsInMemory ? Translate.StorageMemory : Translate.StorageDisk;
+    public long DataSize { get; } = snapshot.DataSize;
+    public string DataSizeText { get; } = ByteFormatter.Format(snapshot.DataSize);
+    public string CreatedAtText { get; } = snapshot.CreatedAt.ToLocalTime().ToString("HH:mm:ss");
+    public string LastAccessedText { get; } = snapshot.LastAccessedAt.ToLocalTime().ToString("HH:mm:ss");
+    public string ScaleText { get; } = string.Create(null, stackalloc char[8], $"{snapshot.Scale * 100:F0}%");
 }
 
 internal sealed class ActionCommand(Action execute) : ICommand

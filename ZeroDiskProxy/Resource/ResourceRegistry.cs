@@ -42,10 +42,11 @@ internal sealed class ResourceRegistry : IDisposable
 
     internal void ReleaseAll()
     {
-        var snapshot = _entries.Values.ToArray();
-        _entries.Clear();
-        foreach (var entry in snapshot)
-            ReleaseEntry(entry);
+        foreach (var kvp in _entries)
+        {
+            if (_entries.TryRemove(kvp.Key, out var entry))
+                ReleaseEntry(entry);
+        }
     }
 
     private static void ReleaseEntry(RegistryEntry entry)
@@ -74,18 +75,9 @@ internal sealed class ResourceRegistry : IDisposable
     private sealed record RegistryEntry(long Id, nint ComPtr, IDisposable? Disposable, string? DebugName);
 }
 
-internal readonly struct ResourceHandle : IDisposable
+internal readonly struct ResourceHandle(long id, ResourceRegistry registry) : IDisposable
 {
-    private readonly long _id;
-    private readonly ResourceRegistry? _registry;
-
-    internal ResourceHandle(long id, ResourceRegistry registry)
-    {
-        _id = id;
-        _registry = registry;
-    }
-
     internal static ResourceHandle Invalid => default;
 
-    public void Dispose() => _registry?.Release(_id);
+    public void Dispose() => registry?.Release(id);
 }

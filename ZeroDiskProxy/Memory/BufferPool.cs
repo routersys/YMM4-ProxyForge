@@ -8,9 +8,9 @@ internal static class BufferPool
     internal static void Return(byte[] buffer, bool clearArray = false) => ArrayPool<byte>.Shared.Return(buffer, clearArray);
 }
 
-internal readonly struct PooledBuffer : IDisposable
+internal struct PooledBuffer : IDisposable
 {
-    private readonly byte[] _buffer;
+    private byte[]? _buffer;
     private readonly int _length;
 
     internal PooledBuffer(int length)
@@ -19,13 +19,14 @@ internal readonly struct PooledBuffer : IDisposable
         _buffer = BufferPool.Rent(length);
     }
 
-    internal byte[] Array => _buffer;
-    internal int Length => _length;
-    internal Span<byte> Span => _buffer.AsSpan(0, _length);
+    internal readonly byte[] Array => _buffer ?? throw new ObjectDisposedException(nameof(PooledBuffer));
+    internal readonly int Length => _length;
+    internal readonly Span<byte> Span => _buffer is not null ? _buffer.AsSpan(0, _length) : throw new ObjectDisposedException(nameof(PooledBuffer));
 
     public void Dispose()
     {
-        if (_buffer is not null)
-            BufferPool.Return(_buffer);
+        var buf = Interlocked.Exchange(ref _buffer, null);
+        if (buf is not null)
+            BufferPool.Return(buf);
     }
 }
