@@ -56,10 +56,12 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
         IMFAttributes? attrs = null;
         IMFMediaType? requestedType = null;
         IMFSourceReader? reader = null;
+        var sessionAcquired = false;
 
         try
         {
             MfSession.AddRef();
+            sessionAcquired = true;
 
             HResultExtensions.ThrowOnFailure(
                 MfNativeMethods.MFCreateAttributes(out attrs, 4), "MFCreateAttributes");
@@ -149,6 +151,8 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
             effect.SetInput(0, bitmap, true);
             effect.TransformMatrix = Matrix3x2.Identity;
 
+            sessionAcquired = false;
+
             return new LightweightVideoFileSource(
                 reader, bitmap, effect, width, height, fps, stride, duration);
         }
@@ -157,8 +161,11 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
             if (reader is not null)
             {
                 try { Marshal.ReleaseComObject(reader); } catch { }
-                MfSession.Release();
             }
+
+            if (sessionAcquired)
+                MfSession.Release();
+
             return null;
         }
         finally
@@ -191,10 +198,6 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
         {
             using var pv = PropVariant.FromInt64(Math.Max(0, targetHns));
             _reader.SetCurrentPosition(Guid.Empty, in pv);
-        }
-
-        if (needsSeek)
-        {
             ReadUntilTarget(targetHns, frameDurationHns);
         }
         else
@@ -224,10 +227,7 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ReadNextFrame()
-    {
-        ReadSampleAndRender(out _);
-    }
+    private void ReadNextFrame() => ReadSampleAndRender(out _);
 
     private ReadResult ReadSampleAndRender(out long timestamp)
     {
@@ -241,7 +241,11 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
             0, out _, out var flags, out timestamp, out var sample);
 
         if (HResultExtensions.Failed(hr))
+        {
+            if (sample is not null)
+                Marshal.ReleaseComObject(sample);
             return ReadResult.Error;
+        }
 
         if ((flags & MfNativeMethods.MF_SOURCE_READERF_ENDOFSTREAM) != 0)
         {

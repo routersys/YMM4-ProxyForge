@@ -22,8 +22,15 @@ internal sealed class ProxyCacheEntry : IDisposable
     internal float Scale { get; }
     internal uint ProxyWidth { get; init; }
     internal uint ProxyHeight { get; init; }
-    internal bool IsInMemory => Volatile.Read(ref _memoryData) is not null && Volatile.Read(ref _diskPath) is null;
-    internal bool IsValid => Volatile.Read(ref _disposed) == 0 && (Volatile.Read(ref _memoryData) is not null || Volatile.Read(ref _diskPath) is not null);
+
+    internal bool IsInMemory =>
+        Volatile.Read(ref _memoryData) is not null &&
+        Volatile.Read(ref _diskPath) is null;
+
+    internal bool IsValid =>
+        Volatile.Read(ref _disposed) == 0 &&
+        (Volatile.Read(ref _memoryData) is not null || Volatile.Read(ref _diskPath) is not null);
+
     internal long DataSize => Interlocked.Read(ref _cachedSize);
     internal DateTime CreatedAt { get; } = DateTime.UtcNow;
     internal DateTime LastAccessedAt => new(Interlocked.Read(ref _lastAccessedTicks));
@@ -163,7 +170,6 @@ internal sealed class ProxyCacheEntry : IDisposable
         var released = Interlocked.Exchange(ref _trackedMemoryBytes, 0);
         if (released > 0)
             _onMemoryReleased?.Invoke(released);
-
     }
 
     private void UpdateLastAccess() =>
@@ -194,36 +200,44 @@ internal sealed class ProxyCacheEntry : IDisposable
     private sealed class PooledMemoryStream(byte[] buffer, int length, ProxyCacheEntry owner) : Stream
     {
         private int _position;
-        private int _disposed;
+        private int _streamDisposed;
 
-        public override bool CanRead => Volatile.Read(ref _disposed) == 0;
-        public override bool CanSeek => Volatile.Read(ref _disposed) == 0;
+        public override bool CanRead => Volatile.Read(ref _streamDisposed) == 0;
+        public override bool CanSeek => Volatile.Read(ref _streamDisposed) == 0;
         public override bool CanWrite => false;
         public override long Length => length;
 
         public override long Position
         {
-            get => _position;
-            set => _position = checked((int)value);
+            get => Volatile.Read(ref _position);
+            set
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(value);
+                ArgumentOutOfRangeException.ThrowIfGreaterThan(value, length);
+                Volatile.Write(ref _position, (int)value);
+            }
         }
 
         public override int Read(byte[] destination, int offset, int count)
         {
-            var available = length - _position;
-            if (available <= 0) return 0;
-            var toRead = Math.Min(count, available);
-            Buffer.BlockCopy(buffer, _position, destination, offset, toRead);
-            _position += toRead;
-            return toRead;
+            ArgumentNullException.ThrowIfNull(destination);
+            ArgumentOutOfRangeException.ThrowIfNegative(offset);
+            ArgumentOutOfRangeException.ThrowIfNegative(count);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(offset + count, destination.Length);
+            return ReadCore(destination.AsSpan(offset, count));
         }
 
-        public override int Read(Span<byte> destination)
+        public override int Read(Span<byte> destination) => ReadCore(destination);
+
+        private int ReadCore(Span<byte> destination)
         {
-            var available = length - _position;
-            if (available <= 0) return 0;
+            var pos = Volatile.Read(ref _position);
+            var available = length - pos;
+            if (available <= 0)
+                return 0;
             var toRead = Math.Min(destination.Length, available);
-            buffer.AsSpan(_position, toRead).CopyTo(destination);
-            _position += toRead;
+            buffer.AsSpan(pos, toRead).CopyTo(destination);
+            Volatile.Write(ref _position, pos + toRead);
             return toRead;
         }
 
@@ -231,27 +245,28 @@ internal sealed class ProxyCacheEntry : IDisposable
         {
             if (cancellationToken.IsCancellationRequested)
                 return ValueTask.FromCanceled<int>(cancellationToken);
-            return ValueTask.FromResult(Read(destination.Span));
+            return ValueTask.FromResult(ReadCore(destination.Span));
         }
 
         public override Task<int> ReadAsync(byte[] destination, int offset, int count, CancellationToken cancellationToken)
         {
             if (cancellationToken.IsCancellationRequested)
                 return Task.FromCanceled<int>(cancellationToken);
-            return Task.FromResult(Read(destination.AsSpan(offset, count)));
+            return Task.FromResult(Read(destination, offset, count));
         }
 
         public override long Seek(long offset, SeekOrigin origin)
         {
-            long newPos = origin switch
+            var newPos = origin switch
             {
                 SeekOrigin.Begin => offset,
-                SeekOrigin.Current => _position + offset,
+                SeekOrigin.Current => Volatile.Read(ref _position) + offset,
                 SeekOrigin.End => length + offset,
                 _ => throw new ArgumentOutOfRangeException(nameof(origin))
             };
-            _position = (int)Math.Clamp(newPos, 0L, (long)length);
-            return _position;
+            var clamped = (int)Math.Clamp(newPos, 0L, (long)length);
+            Volatile.Write(ref _position, clamped);
+            return clamped;
         }
 
         public override void Flush() { }
@@ -264,7 +279,7 @@ internal sealed class ProxyCacheEntry : IDisposable
 
         protected override void Dispose(bool disposing)
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0 && disposing)
+            if (Interlocked.Exchange(ref _streamDisposed, 1) == 0 && disposing)
                 owner.OnStreamClosed();
             base.Dispose(disposing);
         }

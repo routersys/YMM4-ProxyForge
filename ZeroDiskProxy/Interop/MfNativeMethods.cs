@@ -33,6 +33,10 @@ internal static partial class MfNativeMethods
     [DllImport("ole32.dll")]
     internal static extern int PropVariantClear(nint pvar);
 
+    [DllImport("ole32.dll")]
+    internal static extern int CoCreateInstance(
+        in Guid rclsid, nint pUnkOuter, uint dwClsContext, in Guid riid, out nint ppv);
+
     internal const uint MF_VERSION = 0x00020070;
     internal const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
     internal const uint MF_SOURCE_READER_FIRST_AUDIO_STREAM = 0xFFFFFFFD;

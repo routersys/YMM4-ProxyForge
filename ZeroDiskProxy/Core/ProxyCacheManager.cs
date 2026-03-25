@@ -47,9 +47,7 @@ internal sealed class ProxyCacheManager : IDisposable
     internal ProxyCacheEntry? TryGetProxy(string originalPath, float scale)
     {
         var key = MakeKey(originalPath, scale);
-        if (_cache.TryGetValue(key, out var entry) && entry.IsValid)
-            return entry;
-        return null;
+        return _cache.TryGetValue(key, out var entry) && entry.IsValid ? entry : null;
     }
 
     internal bool ProxyExists(string originalPath, float scale)
@@ -83,20 +81,18 @@ internal sealed class ProxyCacheManager : IDisposable
         var progressItem = new ProxyGenerationItem(originalPath);
         DispatchInvoke(() => ActiveGenerations.Add(progressItem));
 
-        int delayMs = 2000;
+        var delayMs = 2000;
 
         try
         {
             using var encoder = _encoderFactory.Create();
             var entry = await encoder.EncodeAsync(
                 originalPath, scale, settings.BitrateFactor / 100f, settings.GopSize,
-                progressItem, cts.Token);
+                progressItem, cts.Token).ConfigureAwait(false);
 
             var stored = _cache.GetOrAdd(key, entry);
             if (!ReferenceEquals(stored, entry))
-            {
                 entry.Dispose();
-            }
 
             var isInMem = stored.IsInMemory;
             DispatchInvoke(() =>
@@ -135,7 +131,7 @@ internal sealed class ProxyCacheManager : IDisposable
             cts.Dispose();
         }
 
-        await Task.Delay(delayMs, CancellationToken.None);
+        await Task.Delay(delayMs, CancellationToken.None).ConfigureAwait(false);
         DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
     }
 
@@ -154,10 +150,8 @@ internal sealed class ProxyCacheManager : IDisposable
     internal void RemoveProxy(string originalPath, float scale)
     {
         var key = MakeKey(originalPath, scale);
-        if (!_cache.TryRemove(key, out var entry))
-            return;
-
-        entry.Dispose();
+        if (_cache.TryRemove(key, out var entry))
+            entry.Dispose();
     }
 
     internal (int count, long totalSize) ClearAll()
@@ -172,7 +166,7 @@ internal sealed class ProxyCacheManager : IDisposable
         }
 
         long totalSize = 0;
-        int count = 0;
+        var count = 0;
         foreach (var kvp in _cache)
         {
             if (_cache.TryRemove(kvp.Key, out var removed))

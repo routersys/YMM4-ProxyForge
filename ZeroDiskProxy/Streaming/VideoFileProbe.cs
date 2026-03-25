@@ -23,8 +23,13 @@ internal static class VideoFileProbe
             return VideoMetadata.Invalid;
 
         IMFSourceReader? reader = null;
+        var sessionAcquired = false;
+
         try
         {
+            MfSession.AddRef();
+            sessionAcquired = true;
+
             var hr = MfNativeMethods.MFCreateSourceReaderFromURL(filePath, null, out reader);
             if (HResultExtensions.Failed(hr) || reader is null)
                 return VideoMetadata.Invalid;
@@ -78,6 +83,9 @@ internal static class VideoFileProbe
                 try { Marshal.ReleaseComObject(reader); }
                 catch { }
             }
+
+            if (sessionAcquired)
+                MfSession.Release();
         }
     }
 
