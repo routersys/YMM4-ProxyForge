@@ -116,54 +116,7 @@ internal sealed class MfProxyEncoder : IProxyEncoder
                 ProxyHeight = proxyHeight
             };
 
-            using var tempHandle = File.OpenHandle(tempPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var fileSize = RandomAccess.GetLength(tempHandle);
-            if (_memoryBudget.TryAllocate(fileSize))
-            {
-                byte[]? rented = null;
-                try
-                {
-                    await using var readStream = new FileStream(
-                        tempPath, FileMode.Open, FileAccess.Read, FileShare.Read,
-                        65536, FileOptions.SequentialScan | FileOptions.Asynchronous);
-                    var exactSize = (int)readStream.Length;
-                    rented = BufferPool.Rent(exactSize);
-                    int totalRead = 0;
-                    while (totalRead < exactSize)
-                    {
-                        int read = await readStream.ReadAsync(rented.AsMemory(totalRead, exactSize - totalRead), cancellationToken);
-                        if (read == 0)
-                            break;
-                        totalRead += read;
-                    }
-
-                    var delta = (long)totalRead - fileSize;
-                    if (delta > 0)
-                        _memoryBudget.RecordAllocation(delta);
-                    else if (delta < 0)
-                        _memoryBudget.RecordDeallocation(-delta);
-
-                    entry.SetMemoryData(rented, totalRead);
-                    rented = null;
-                    TryDeleteFile(tempPath);
-                }
-                catch
-                {
-                    if (rented is not null)
-                        BufferPool.Return(rented);
-                    _memoryBudget.RecordDeallocation(fileSize);
-                    throw;
-                }
-            }
-            else if (_config.EnableDiskFallback)
-            {
-                entry.SetDiskPath(tempPath, fileSize);
-            }
-            else
-            {
-                throw new InvalidOperationException("Insufficient memory for proxy and disk fallback is disabled.");
-            }
-
+            CaptureOutputHybrid(tempPath, entry);
             return entry;
         }
         catch
@@ -172,6 +125,12 @@ internal sealed class MfProxyEncoder : IProxyEncoder
             TryDeleteFile(tempPath);
             throw;
         }
+    }
+
+    private void CaptureOutputHybrid(string outputPath, ProxyCacheEntry entry)
+    {
+        var fileSize = new FileInfo(outputPath).Length;
+        entry.SetDiskPath(outputPath, fileSize);
     }
 
     internal static uint AlignTo16(uint value)

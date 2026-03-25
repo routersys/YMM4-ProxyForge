@@ -47,18 +47,18 @@ internal sealed class PluginHost : IDisposable
     {
         var settings = ZeroDiskProxySettings.Default;
         var budget = new MemoryBudget(settings.MemoryReserveMb, settings.MaxCacheMemoryMb);
-        var fallbackDirectory = Path.Combine(AppDirectories.TemporaryDirectory, "ZeroDiskProxyTemp");
+        var pluginDir = Path.GetDirectoryName(typeof(PluginHost).Assembly.Location) ?? AppDirectories.TemporaryDirectory;
+        var fallbackDirectory = Path.Combine(pluginDir, "ZeroDiskProxyTemp");
         var chunkAllocator = new ChunkAllocator(65536);
 
         MfSession.AddRef();
 
-        IProxyEncoderFactory encoderFactory = new StreamingMfEncoderFactory(
+        IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
             budget,
             fallbackDirectory,
             static () => new EncoderConfig(
                 ZeroDiskProxySettings.Default.EnableHardwareAcceleration,
-                ZeroDiskProxySettings.Default.EnableDiskFallback),
-            chunkAllocator);
+                ZeroDiskProxySettings.Default.EnableDiskFallback));
 
         IExportDetector exportDetector = new ExportDetector();
         return new PluginHost(budget, encoderFactory, exportDetector, chunkAllocator, fallbackDirectory);

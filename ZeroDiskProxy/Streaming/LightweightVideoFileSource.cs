@@ -14,37 +14,35 @@ namespace ZeroDiskProxy.Streaming;
 
 internal sealed class LightweightVideoFileSource : IVideoFileSource
 {
-    private IMFSourceReader? _reader;
+    private readonly string _filePath;
     private readonly ID2D1Bitmap _bitmap;
     private readonly AffineTransform2D _effect;
     private readonly ID2D1Image _output;
     private readonly uint _width;
     private readonly uint _height;
     private readonly double _fps;
-    private readonly int _stride;
     private readonly TimeSpan _duration;
+    private byte[]? _bgraBuffer;
     private int _lastFrameIndex = -1;
     private bool _hasFrame;
-    private long _lastDecodedHns = -1;
     private int _disposed;
 
     public TimeSpan Duration => _duration;
     public ID2D1Image Output => _output;
 
     private LightweightVideoFileSource(
-        IMFSourceReader reader,
+        string filePath,
         ID2D1Bitmap bitmap,
         AffineTransform2D effect,
-        uint width, uint height, double fps, int stride, TimeSpan duration)
+        uint width, uint height, double fps, TimeSpan duration)
     {
-        _reader = reader;
+        _filePath = filePath;
         _bitmap = bitmap;
         _effect = effect;
         _output = effect.Output;
         _width = width;
         _height = height;
         _fps = fps;
-        _stride = stride;
         _duration = duration;
     }
 
@@ -54,21 +52,15 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
             return null;
 
         IMFAttributes? attrs = null;
-        IMFMediaType? requestedType = null;
         IMFSourceReader? reader = null;
-        var sessionAcquired = false;
 
         try
         {
             MfSession.AddRef();
-            sessionAcquired = true;
 
             HResultExtensions.ThrowOnFailure(
-                MfNativeMethods.MFCreateAttributes(out attrs, 4), "MFCreateAttributes");
-
-            attrs.SetUINT32(MfAttributeKeys.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1);
+                MfNativeMethods.MFCreateAttributes(out attrs, 2), "MFCreateAttributes");
             attrs.SetUINT32(MfAttributeKeys.MF_LOW_LATENCY, 1);
-            attrs.SetUINT32(MfAttributeKeys.MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1);
 
             var hr = MfNativeMethods.MFCreateSourceReaderFromURL(filePath, attrs, out reader);
             if (HResultExtensions.Failed(hr) || reader is null)
@@ -80,67 +72,44 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
             reader.SetStreamSelection(0xFFFFFFFE, false);
             reader.SetStreamSelection(MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, true);
 
-            HResultExtensions.ThrowOnFailure(
-                MfNativeMethods.MFCreateMediaType(out requestedType), "MFCreateMediaType");
-
-            requestedType.SetGUID(MfAttributeKeys.MF_MT_MAJOR_TYPE, MfAttributeKeys.MFMediaType_Video);
-            requestedType.SetGUID(MfAttributeKeys.MF_MT_SUBTYPE, MfAttributeKeys.MFVideoFormat_RGB32);
-
-            hr = reader.SetCurrentMediaType(
-                MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, nint.Zero, requestedType);
-            if (HResultExtensions.Failed(hr))
-            {
-                Marshal.ReleaseComObject(reader);
-                MfSession.Release();
-                return null;
-            }
-
-            hr = reader.GetCurrentMediaType(
-                MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, out var actualType);
-            if (HResultExtensions.Failed(hr) || actualType is null)
-            {
-                Marshal.ReleaseComObject(reader);
-                MfSession.Release();
-                return null;
-            }
-
             uint width = 1920, height = 1080;
             var fps = 30.0;
-            var stride = 0;
 
-            try
+            hr = reader.GetCurrentMediaType(
+                MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, out var nativeType);
+            if (HResultExtensions.Succeeded(hr) && nativeType is not null)
             {
-                if (HResultExtensions.Succeeded(
-                        actualType.GetUINT64(MfAttributeKeys.MF_MT_FRAME_SIZE, out var packed)))
+                try
                 {
-                    width = (uint)(packed >> 32);
-                    height = (uint)(packed & 0xFFFFFFFF);
-                }
+                    if (HResultExtensions.Succeeded(
+                            nativeType.GetUINT64(MfAttributeKeys.MF_MT_FRAME_SIZE, out var packed)))
+                    {
+                        var w = (uint)(packed >> 32);
+                        var h = (uint)(packed & 0xFFFFFFFF);
+                        if (w > 0) width = w;
+                        if (h > 0) height = h;
+                    }
 
-                if (HResultExtensions.Succeeded(
-                        actualType.GetUINT64(MfAttributeKeys.MF_MT_FRAME_RATE, out var packedRate)))
+                    if (HResultExtensions.Succeeded(
+                            nativeType.GetUINT64(MfAttributeKeys.MF_MT_FRAME_RATE, out var packedRate)))
+                    {
+                        var num = (uint)(packedRate >> 32);
+                        var den = (uint)(packedRate & 0xFFFFFFFF);
+                        if (num > 0 && den > 0)
+                            fps = (double)num / den;
+                    }
+                }
+                finally
                 {
-                    var num = (uint)(packedRate >> 32);
-                    var den = (uint)(packedRate & 0xFFFFFFFF);
-                    if (num > 0 && den > 0)
-                        fps = (double)num / den;
+                    Marshal.FinalReleaseComObject(nativeType);
                 }
-
-                if (HResultExtensions.Succeeded(
-                        actualType.GetUINT32(MfAttributeKeys.MF_MT_DEFAULT_STRIDE, out var strideVal)))
-                    stride = (int)strideVal;
             }
-            finally
-            {
-                Marshal.ReleaseComObject(actualType);
-            }
-
-            if (width == 0) width = 1920;
-            if (height == 0) height = 1080;
-            if (stride == 0) stride = (int)(width * 4);
-            if (stride < 0) stride = -stride;
 
             var duration = QueryDuration(reader);
+
+            Marshal.FinalReleaseComObject(reader);
+            reader = null;
+            MfSession.Release();
 
             var pixelFormat = new PixelFormat(Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Ignore);
             var bitmapProps = new BitmapProperties(pixelFormat);
@@ -149,169 +118,214 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
 
             var effect = new AffineTransform2D(devices.DeviceContext);
             effect.SetInput(0, bitmap, true);
-            effect.TransformMatrix = Matrix3x2.Identity;
-
-            sessionAcquired = false;
+            effect.TransformMatrix = Matrix3x2.CreateTranslation(-(int)width / 2f, -(int)height / 2f);
 
             return new LightweightVideoFileSource(
-                reader, bitmap, effect, width, height, fps, stride, duration);
+                filePath, bitmap, effect, width, height, fps, duration);
         }
         catch
         {
             if (reader is not null)
             {
-                try { Marshal.ReleaseComObject(reader); } catch { }
-            }
-
-            if (sessionAcquired)
+                try { Marshal.FinalReleaseComObject(reader); } catch { }
                 MfSession.Release();
-
+            }
             return null;
         }
         finally
         {
             if (attrs is not null)
-                Marshal.ReleaseComObject(attrs);
-            if (requestedType is not null)
-                Marshal.ReleaseComObject(requestedType);
+                Marshal.FinalReleaseComObject(attrs);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Update(TimeSpan time)
     {
-        if (Volatile.Read(ref _disposed) != 0 || _reader is null)
+        if (Volatile.Read(ref _disposed) != 0)
             return;
 
         var frameIndex = GetFrameIndex(time);
         if (frameIndex == _lastFrameIndex && _hasFrame)
             return;
 
-        var targetHns = time.Ticks;
-        var frameDurationHns = _fps > 0 ? (long)(10_000_000.0 / _fps) : 333_333L;
-
-        var needsSeek = !_hasFrame ||
-                        targetHns < _lastDecodedHns ||
-                        targetHns - _lastDecodedHns > frameDurationHns * 5;
-
-        if (needsSeek)
-        {
-            using var pv = PropVariant.FromInt64(Math.Max(0, targetHns));
-            _reader.SetCurrentPosition(Guid.Empty, in pv);
-            ReadUntilTarget(targetHns, frameDurationHns);
-        }
-        else
-        {
-            ReadNextFrame();
-        }
-
+        ExtractFrame(time);
         _lastFrameIndex = frameIndex;
     }
 
-    private void ReadUntilTarget(long targetHns, long frameDurationHns)
+    private void ExtractFrame(TimeSpan time)
     {
-        const int maxSkipFrames = 8;
-        var attempts = 0;
-
-        while (attempts < maxSkipFrames)
-        {
-            var result = ReadSampleAndRender(out var timestamp);
-            if (result != ReadResult.Success)
-                break;
-
-            if (timestamp >= targetHns - frameDurationHns)
-                break;
-
-            attempts++;
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ReadNextFrame() => ReadSampleAndRender(out _);
-
-    private ReadResult ReadSampleAndRender(out long timestamp)
-    {
-        timestamp = 0;
-
-        if (_reader is null)
-            return ReadResult.Error;
-
-        var hr = _reader.ReadSample(
-            MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM,
-            0, out _, out var flags, out timestamp, out var sample);
-
-        if (HResultExtensions.Failed(hr))
-        {
-            if (sample is not null)
-                Marshal.ReleaseComObject(sample);
-            return ReadResult.Error;
-        }
-
-        if ((flags & MfNativeMethods.MF_SOURCE_READERF_ENDOFSTREAM) != 0)
-        {
-            if (sample is not null)
-                Marshal.ReleaseComObject(sample);
-            return ReadResult.EndOfStream;
-        }
-
-        if ((flags & MfNativeMethods.MF_SOURCE_READERF_ERROR) != 0)
-        {
-            if (sample is not null)
-                Marshal.ReleaseComObject(sample);
-            return ReadResult.Error;
-        }
-
-        if (sample is null)
-            return ReadResult.Empty;
+        IMFAttributes? attrs = null;
+        IMFSourceReader? reader = null;
+        var sessionAcquired = false;
 
         try
         {
-            RenderSampleToBitmap(sample);
-            _hasFrame = true;
-            _lastDecodedHns = timestamp;
-            return ReadResult.Success;
+            MfSession.AddRef();
+            sessionAcquired = true;
+
+            HResultExtensions.ThrowOnFailure(
+                MfNativeMethods.MFCreateAttributes(out attrs, 2));
+            attrs.SetUINT32(MfAttributeKeys.MF_LOW_LATENCY, 1);
+
+            var hr = MfNativeMethods.MFCreateSourceReaderFromURL(_filePath, attrs, out reader);
+            if (HResultExtensions.Failed(hr) || reader is null)
+                return;
+
+            reader.SetStreamSelection(0xFFFFFFFE, false);
+            reader.SetStreamSelection(MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, true);
+
+            var isNv12 = false;
+            IMFMediaType? outType = null;
+            try
+            {
+                HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMediaType(out outType));
+                outType.SetGUID(MfAttributeKeys.MF_MT_MAJOR_TYPE, MfAttributeKeys.MFMediaType_Video);
+                outType.SetGUID(MfAttributeKeys.MF_MT_SUBTYPE, MfAttributeKeys.MFVideoFormat_NV12);
+
+                hr = reader.SetCurrentMediaType(
+                    MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, nint.Zero, outType);
+
+                if (HResultExtensions.Succeeded(hr))
+                {
+                    isNv12 = true;
+                }
+                else
+                {
+                    outType.SetGUID(MfAttributeKeys.MF_MT_SUBTYPE, MfAttributeKeys.MFVideoFormat_RGB32);
+                    outType.SetUINT32(MfAttributeKeys.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1);
+                    reader.SetCurrentMediaType(
+                        MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, nint.Zero, outType);
+                }
+            }
+            finally
+            {
+                if (outType is not null)
+                    Marshal.FinalReleaseComObject(outType);
+            }
+
+            var targetHns = Math.Max(0, time.Ticks);
+            using var pv = PropVariant.FromInt64(targetHns);
+            reader.SetCurrentPosition(Guid.Empty, in pv);
+
+            var frameDurationHns = _fps > 0 ? (long)(10_000_000.0 / _fps) : 333_333L;
+            const int maxReads = 16;
+
+            for (var i = 0; i < maxReads; i++)
+            {
+                hr = reader.ReadSample(
+                    MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM,
+                    0, out _, out var flags, out var timestamp, out var sample);
+
+                if (HResultExtensions.Failed(hr) ||
+                    (flags & MfNativeMethods.MF_SOURCE_READERF_ENDOFSTREAM) != 0 ||
+                    (flags & MfNativeMethods.MF_SOURCE_READERF_ERROR) != 0)
+                {
+                    if (sample is not null)
+                        Marshal.FinalReleaseComObject(sample);
+                    break;
+                }
+
+                if (sample is null)
+                    continue;
+
+                if (timestamp >= targetHns - frameDurationHns)
+                {
+                    if (isNv12)
+                        RenderNv12Sample(sample);
+                    else
+                        RenderRgb32Sample(sample);
+                    _hasFrame = true;
+                    Marshal.FinalReleaseComObject(sample);
+                    break;
+                }
+
+                Marshal.FinalReleaseComObject(sample);
+            }
+        }
+        catch
+        {
         }
         finally
         {
-            Marshal.ReleaseComObject(sample);
+            if (reader is not null)
+            {
+                try { Marshal.FinalReleaseComObject(reader); } catch { }
+            }
+            if (attrs is not null)
+            {
+                try { Marshal.FinalReleaseComObject(attrs); } catch { }
+            }
+            if (sessionAcquired)
+                MfSession.Release();
         }
     }
 
-    private void RenderSampleToBitmap(IMFSample sample)
+    private unsafe void RenderNv12Sample(IMFSample sample)
     {
-        var hr = sample.ConvertToContiguousBuffer(out var buffer);
-        if (HResultExtensions.Failed(hr) || buffer is null)
+        sample.GetBufferByIndex(0, out var buffer);
+        if (buffer is null)
             return;
 
         try
         {
-            if (buffer is IMF2DBuffer buffer2D)
-            {
-                hr = buffer2D.Lock2D(out var scanline0, out var pitch);
-                if (HResultExtensions.Succeeded(hr))
-                {
-                    try
-                    {
-                        _bitmap.CopyFromMemory(scanline0, Math.Abs(pitch));
-                    }
-                    finally
-                    {
-                        buffer2D.Unlock2D();
-                    }
-                    return;
-                }
-            }
-
-            hr = buffer.Lock(out var ptr, out _, out var currentLength);
+            var hr = buffer.Lock(out var dataPtr, out _, out var currentLength);
             if (HResultExtensions.Failed(hr))
                 return;
 
             try
             {
-                var pitch = _height > 0 && currentLength >= (int)_height * 4
-                    ? currentLength / (int)_height
-                    : _stride;
-                _bitmap.CopyFromMemory(ptr, pitch);
+                var w = (int)_width;
+                var h = (int)_height;
+                if (w <= 0 || h <= 0 || currentLength <= 0)
+                    return;
+
+                var alignedH = currentLength * 2 / (w * 3);
+                if (alignedH < h)
+                    alignedH = h;
+
+                var bgraSize = w * h * 4;
+                var buf = _bgraBuffer;
+                if (buf is null || buf.Length < bgraSize)
+                    _bgraBuffer = buf = new byte[bgraSize];
+
+                var bgraStride = w * 4;
+
+                fixed (byte* bgraBase = buf)
+                {
+                    byte* yPlane = (byte*)dataPtr;
+                    byte* uvPlane = yPlane + w * alignedH;
+
+                    for (var y = 0; y < h; y++)
+                    {
+                        byte* yRow = yPlane + y * w;
+                        byte* uvRow = uvPlane + (y >> 1) * w;
+                        byte* dst = bgraBase + y * bgraStride;
+
+                        for (var x = 0; x < w; x++)
+                        {
+                            var yv = yRow[x];
+                            var u = uvRow[x & ~1];
+                            var v = uvRow[(x & ~1) + 1];
+
+                            var c = yv - 16;
+                            var d = u - 128;
+                            var e = v - 128;
+
+                            var r = (298 * c + 409 * e + 128) >> 8;
+                            var g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+                            var b = (298 * c + 516 * d + 128) >> 8;
+
+                            dst[0] = (byte)(b < 0 ? 0 : b > 255 ? 255 : b);
+                            dst[1] = (byte)(g < 0 ? 0 : g > 255 ? 255 : g);
+                            dst[2] = (byte)(r < 0 ? 0 : r > 255 ? 255 : r);
+                            dst[3] = 255;
+                            dst += 4;
+                        }
+                    }
+
+                    _bitmap.CopyFromMemory((nint)bgraBase, bgraStride);
+                }
             }
             finally
             {
@@ -320,7 +334,57 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
         }
         finally
         {
-            Marshal.ReleaseComObject(buffer);
+            Marshal.FinalReleaseComObject(buffer);
+        }
+    }
+
+    private void RenderRgb32Sample(IMFSample sample)
+    {
+        sample.GetBufferByIndex(0, out var buffer);
+        if (buffer is null)
+            return;
+
+        try
+        {
+            var minPitch = (int)_width * 4;
+
+            if (buffer is IMF2DBuffer buf2D)
+            {
+                var hr = buf2D.Lock2D(out var scanline, out var pitch);
+                if (HResultExtensions.Succeeded(hr))
+                {
+                    try
+                    {
+                        if (Math.Abs(pitch) >= minPitch)
+                            _bitmap.CopyFromMemory(scanline, Math.Abs(pitch));
+                    }
+                    finally
+                    {
+                        buf2D.Unlock2D();
+                    }
+                    return;
+                }
+            }
+
+            {
+                var hr = buffer.Lock(out var ptr, out _, out var currentLength);
+                if (HResultExtensions.Failed(hr))
+                    return;
+
+                try
+                {
+                    if (currentLength >= minPitch * (int)_height)
+                        _bitmap.CopyFromMemory(ptr, minPitch);
+                }
+                finally
+                {
+                    buffer.Unlock();
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FinalReleaseComObject(buffer);
         }
     }
 
@@ -368,23 +432,8 @@ internal sealed class LightweightVideoFileSource : IVideoFileSource
         _effect.SetInput(0, null, true);
         _effect.Dispose();
         _bitmap.Dispose();
-
-        var reader = Interlocked.Exchange(ref _reader, null);
-        if (reader is not null)
-        {
-            try { Marshal.ReleaseComObject(reader); }
-            catch { }
-            MfSession.Release();
-        }
+        _bgraBuffer = null;
 
         GC.SuppressFinalize(this);
-    }
-
-    private enum ReadResult : byte
-    {
-        Success,
-        Empty,
-        EndOfStream,
-        Error
     }
 }

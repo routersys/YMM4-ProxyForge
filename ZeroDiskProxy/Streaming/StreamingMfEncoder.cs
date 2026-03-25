@@ -35,64 +35,50 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         ValidateInputPath(inputPath);
 
-        Directory.CreateDirectory(_fallbackDirectory);
-
-        Span<char> fileNameBuf = stackalloc char[40];
-        "zdp_".AsSpan().CopyTo(fileNameBuf);
-        Guid.NewGuid().TryFormat(fileNameBuf[4..], out _, "N");
-        ".mp4".AsSpan().CopyTo(fileNameBuf[36..]);
-        var tempFileName = new string(fileNameBuf);
-        var tempPath = Path.Combine(_fallbackDirectory, tempFileName);
-        ValidateTempPath(tempPath);
-
         ProxyCacheEntry? entry = null;
 
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var metadata = VideoFileProbe.Probe(inputPath);
-            var origWidth = metadata is { IsValid: true, Width: > 0 } ? metadata.Width : 1920u;
-            var origHeight = metadata is { IsValid: true, Height: > 0 } ? metadata.Height : 1080u;
-            var fps = metadata is { IsValid: true, FrameRate: > 0 } ? metadata.FrameRate : 30.0;
-            var durationHns = metadata is { IsValid: true, DurationHns: > 0 } ? metadata.DurationHns : 0L;
-
-            var proxyWidth = AlignTo16((uint)(origWidth * scale));
-            var proxyHeight = AlignTo16((uint)(origHeight * scale));
-            var bitrate = Math.Max((uint)(proxyWidth * proxyHeight * fps * 0.07 * bitrateFactor), 100_000u);
-
-            await Task.Run(() => EncodeCore(
-                inputPath, tempPath,
-                origWidth, origHeight,
-                proxyWidth, proxyHeight,
-                fps, bitrate, gopSize,
-                durationHns, progressItem, cancellationToken), CancellationToken.None).ConfigureAwait(false);
+            var result = await Task.Run(() => EncodeCoreInMemory(
+                inputPath, scale, bitrateFactor, gopSize,
+                progressItem, cancellationToken), CancellationToken.None).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            float effectiveScale = (float)proxyWidth / origWidth;
-            entry = new ProxyCacheEntry(inputPath, effectiveScale, _memoryBudget.RecordDeallocation)
+            entry = new ProxyCacheEntry(inputPath, result.EffectiveScale, _memoryBudget.RecordDeallocation)
             {
-                ProxyWidth = proxyWidth,
-                ProxyHeight = proxyHeight
+                ProxyWidth = result.ProxyWidth,
+                ProxyHeight = result.ProxyHeight
             };
 
-            CaptureOutputChunked(tempPath, entry);
+            if (result.Data is not null)
+            {
+                _memoryBudget.RecordAllocation(result.DataLength);
+                entry.SetMemoryData(result.Data, result.DataLength);
+            }
+            else if (result.DiskPath is not null)
+            {
+                var fi = new FileInfo(result.DiskPath);
+                entry.SetDiskPath(result.DiskPath, fi.Exists ? fi.Length : 0);
+            }
+
             return entry;
         }
         catch
         {
             entry?.Dispose();
-            TryDeleteFile(tempPath);
             throw;
         }
     }
 
-    private void EncodeCore(
-        string inputPath, string outputPath,
-        uint origWidth, uint origHeight,
-        uint proxyWidth, uint proxyHeight, double fps,
-        uint bitrate, int gopSize, long durationHns,
+    private readonly record struct EncodeResult(
+        uint ProxyWidth, uint ProxyHeight, float EffectiveScale,
+        byte[]? Data, int DataLength, string? DiskPath);
+
+    private EncodeResult EncodeCoreInMemory(
+        string inputPath, float scale, float bitrateFactor, int gopSize,
         ProxyGenerationItem? progressItem, CancellationToken cancellationToken)
     {
         IMFSourceReader? reader = null;
@@ -101,11 +87,11 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
         IMFAttributes? writerAttrs = null;
         IMFMediaType? outputType = null;
         IMFAttributes? encoderParams = null;
-
-        var needsResize = proxyWidth != origWidth || proxyHeight != origHeight;
         IMFMediaType? converterInputType = null;
         IMFMediaType? converterOutputType = null;
         nint transformPtr = nint.Zero;
+        nint comStreamPtr = nint.Zero;
+        nint byteStreamPtr = nint.Zero;
 
         try
         {
@@ -122,6 +108,12 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
 
             reader.SetStreamSelection(0xFFFFFFFE, false);
             reader.SetStreamSelection(MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, true);
+
+            ExtractMetadata(reader, out var origWidth, out var origHeight, out var fps, out var durationHns);
+
+            var proxyWidth = AlignTo16((uint)(origWidth * scale));
+            var proxyHeight = AlignTo16((uint)(origHeight * scale));
+            var bitrate = Math.Max((uint)(proxyWidth * proxyHeight * fps * 0.07 * bitrateFactor), 100_000u);
 
             var readerOutputType = ConfigureReaderOutput(reader, proxyWidth, proxyHeight, origWidth, origHeight, fps);
             Guid readerSubtype;
@@ -142,7 +134,12 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
             writerAttrs.SetUINT32(MfAttributeKeys.MF_SINK_WRITER_DISABLE_THROTTLING, 1u);
 
             HResultExtensions.ThrowOnFailure(
-                MfNativeMethods.MFCreateSinkWriterFromURL(outputPath, nint.Zero, writerAttrs, out writer));
+                MfNativeMethods.CreateStreamOnHGlobal(nint.Zero, true, out comStreamPtr));
+            HResultExtensions.ThrowOnFailure(
+                MfNativeMethods.MFCreateMFByteStreamOnStream(comStreamPtr, out byteStreamPtr));
+
+            HResultExtensions.ThrowOnFailure(
+                MfNativeMethods.MFCreateSinkWriterFromURL("output.mp4", byteStreamPtr, writerAttrs, out writer));
 
             HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMediaType(out outputType));
             outputType.SetGUID(MfAttributeKeys.MF_MT_MAJOR_TYPE, MfAttributeKeys.MFMediaType_Video);
@@ -229,9 +226,26 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
 
             HResultExtensions.ThrowOnFailure(writer.BeginWriting());
 
-            ProcessSamples(reader, writer, colorConverter, streamIndex, durationHns, progressItem, cancellationToken);
+            ProcessSamples(reader, writer, colorConverter, streamIndex, proxyWidth, proxyHeight, durationHns, progressItem, cancellationToken);
 
             HResultExtensions.ThrowOnFailure(writer.Finalize_());
+
+            if (writer is not null) { try { Marshal.ReleaseComObject(writer); } catch { } writer = null; }
+
+            float effectiveScale = (float)proxyWidth / origWidth;
+
+            var data = ExtractStreamData(comStreamPtr);
+            if (data is not null)
+                return new EncodeResult(proxyWidth, proxyHeight, effectiveScale, data.Value.buffer, data.Value.length, null);
+
+            if (_config.EnableDiskFallback)
+            {
+                Directory.CreateDirectory(_fallbackDirectory);
+                var diskPath = WriteFallbackFile(comStreamPtr);
+                return new EncodeResult(proxyWidth, proxyHeight, effectiveScale, null, 0, diskPath);
+            }
+
+            throw new InvalidOperationException("Insufficient memory for proxy and disk fallback is disabled.");
         }
         finally
         {
@@ -244,7 +258,139 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
             if (writerAttrs is not null) { try { Marshal.ReleaseComObject(writerAttrs); } catch { } }
             if (reader is not null) { try { Marshal.ReleaseComObject(reader); } catch { } }
             if (readerAttrs is not null) { try { Marshal.ReleaseComObject(readerAttrs); } catch { } }
+            if (byteStreamPtr != nint.Zero) { try { Marshal.Release(byteStreamPtr); } catch { } }
+            if (comStreamPtr != nint.Zero) { try { Marshal.Release(comStreamPtr); } catch { } }
             MfSession.Release();
+        }
+    }
+
+    private static (byte[] buffer, int length)? ExtractStreamData(nint comStreamPtr)
+    {
+        if (comStreamPtr == nint.Zero)
+            return null;
+
+        try
+        {
+            var stream = (System.Runtime.InteropServices.ComTypes.IStream)Marshal.GetObjectForIUnknown(comStreamPtr);
+            System.Runtime.InteropServices.ComTypes.STATSTG stat;
+            stream.Stat(out stat, 1);
+            var size = (int)stat.cbSize;
+
+            if (size <= 0)
+                return null;
+
+            stream.Seek(0, 0, nint.Zero);
+
+            var buffer = BufferPool.Rent(size);
+            stream.Read(buffer, size, nint.Zero);
+            return (buffer, size);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string WriteFallbackFile(nint comStreamPtr)
+    {
+        Span<char> fileNameBuf = stackalloc char[40];
+        "zdp_".AsSpan().CopyTo(fileNameBuf);
+        Guid.NewGuid().TryFormat(fileNameBuf[4..], out _, "N");
+        ".mp4".AsSpan().CopyTo(fileNameBuf[36..]);
+        var path = Path.Combine(_fallbackDirectory, new string(fileNameBuf));
+
+        var stream = (System.Runtime.InteropServices.ComTypes.IStream)Marshal.GetObjectForIUnknown(comStreamPtr);
+        System.Runtime.InteropServices.ComTypes.STATSTG stat;
+        stream.Stat(out stat, 1);
+        var size = (int)stat.cbSize;
+
+        stream.Seek(0, 0, nint.Zero);
+
+        using var fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536);
+        var chunk = new byte[65536];
+        var remaining = size;
+        while (remaining > 0)
+        {
+            var toRead = Math.Min(remaining, chunk.Length);
+            stream.Read(chunk, toRead, nint.Zero);
+            fs.Write(chunk, 0, toRead);
+            remaining -= toRead;
+        }
+
+        return path;
+    }
+
+    private static void ExtractMetadata(
+        IMFSourceReader reader,
+        out uint width, out uint height, out double fps, out long durationHns)
+    {
+        width = 1920;
+        height = 1080;
+        fps = 30.0;
+        durationHns = 0;
+
+        var hr = reader.GetCurrentMediaType(
+            MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, out var nativeType);
+        if (HResultExtensions.Failed(hr) || nativeType is null)
+            return;
+
+        try
+        {
+            if (HResultExtensions.Succeeded(
+                    nativeType.GetUINT64(MfAttributeKeys.MF_MT_FRAME_SIZE, out var packed)))
+            {
+                var w = (uint)(packed >> 32);
+                var h = (uint)(packed & 0xFFFFFFFF);
+                if (w > 0) width = w;
+                if (h > 0) height = h;
+            }
+
+            if (HResultExtensions.Succeeded(
+                    nativeType.GetUINT64(MfAttributeKeys.MF_MT_FRAME_RATE, out var packedRate)))
+            {
+                var num = (uint)(packedRate >> 32);
+                var den = (uint)(packedRate & 0xFFFFFFFF);
+                if (num > 0 && den > 0)
+                    fps = (double)num / den;
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(nativeType);
+        }
+
+        durationHns = QueryDuration(reader);
+    }
+
+    private static long QueryDuration(IMFSourceReader reader)
+    {
+        var pvPtr = Marshal.AllocHGlobal(24);
+        try
+        {
+            unsafe { new Span<byte>((void*)pvPtr, 24).Clear(); }
+
+            var hr = reader.GetPresentationAttribute(
+                MfNativeMethods.MF_SOURCE_READER_MEDIASOURCE,
+                MfAttributeKeys.MF_PD_DURATION,
+                pvPtr);
+
+            if (HResultExtensions.Succeeded(hr))
+            {
+                var vt = Marshal.ReadInt16(pvPtr);
+                if (vt is 20 or 21)
+                    return Marshal.ReadInt64(pvPtr, 8);
+            }
+
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
+        finally
+        {
+            MfNativeMethods.PropVariantClear(pvPtr);
+            Marshal.FreeHGlobal(pvPtr);
         }
     }
 
@@ -302,121 +448,114 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
     private static void ProcessSamples(
         IMFSourceReader reader, IMFSinkWriter writer,
         IMFTransform? colorConverter, uint streamIndex,
+        uint proxyWidth, uint proxyHeight,
         long durationHns, ProxyGenerationItem? progressItem,
         CancellationToken cancellationToken)
     {
         Action? applyProgress = progressItem is not null ? progressItem.ApplyPendingProgress : null;
         var lastReportedCenti = 0L;
 
-        while (true)
+        IMFSample? reusableSample = null;
+        IMFMediaBuffer? reusableBuffer = null;
+
+        if (colorConverter is not null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var hr = reader.ReadSample(
-                MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM,
-                0, out _, out var flags, out var timestamp, out var sample);
-
-            if (HResultExtensions.Failed(hr))
-            {
-                if (sample is not null) Marshal.ReleaseComObject(sample);
-                HResultExtensions.ThrowOnFailure(hr);
-            }
-
-            if ((flags & MfNativeMethods.MF_SOURCE_READERF_ERROR) != 0)
-            {
-                if (sample is not null) Marshal.ReleaseComObject(sample);
-                throw new InvalidOperationException("Source reader error during encode.");
-            }
-
-            if ((flags & MfNativeMethods.MF_SOURCE_READERF_ENDOFSTREAM) != 0)
-            {
-                if (sample is not null) Marshal.ReleaseComObject(sample);
-                break;
-            }
-
-            if (sample is null)
-                continue;
-
-            try
-            {
-                var sampleToWrite = sample;
-                IMFSample? convertedSample = null;
-
-                if (colorConverter is not null)
-                {
-                    convertedSample = ConvertSample(colorConverter, sample);
-                    if (convertedSample is not null)
-                    {
-                        convertedSample.SetSampleTime(timestamp);
-                        sample.GetSampleDuration(out var dur);
-                        if (dur > 0)
-                            convertedSample.SetSampleDuration(dur);
-                        sampleToWrite = convertedSample;
-                    }
-                }
-
-                try
-                {
-                    HResultExtensions.ThrowOnFailure(writer.WriteSample(streamIndex, sampleToWrite));
-                }
-                finally
-                {
-                    if (convertedSample is not null)
-                        Marshal.ReleaseComObject(convertedSample);
-                }
-
-                ReportProgress(progressItem, applyProgress, durationHns, timestamp, ref lastReportedCenti);
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(sample);
-            }
+            var bufSize = (int)(proxyWidth * proxyHeight * 4);
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateSample(out var sample));
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMemoryBuffer(bufSize, out var buffer));
+            sample.AddBuffer(buffer);
+            reusableSample = sample;
+            reusableBuffer = buffer;
         }
-    }
-
-    private static IMFSample? ConvertSample(IMFTransform converter, IMFSample inputSample)
-    {
-        var hr = converter.ProcessInput(0, inputSample, 0);
-        if (HResultExtensions.Failed(hr))
-            return null;
-
-        HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateSample(out var outSample));
-
-        inputSample.GetTotalLength(out var totalLen);
-        var bufSize = Math.Max((int)totalLen, 1024);
-        HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMemoryBuffer(bufSize, out var outBuffer));
 
         try
         {
-            outSample.AddBuffer(outBuffer);
-
-            var outputBuffer = new MFT_OUTPUT_DATA_BUFFER
+            while (true)
             {
-                dwStreamID = 0,
-                pSample = outSample,
-                dwStatus = 0,
-                pEvents = null
-            };
+                cancellationToken.ThrowIfCancellationRequested();
 
-            hr = converter.ProcessOutput(0, 1, ref outputBuffer, out _);
+                var hr = reader.ReadSample(
+                    MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM,
+                    0, out _, out var flags, out var timestamp, out var sample);
 
-            if (HResultExtensions.Failed(hr))
-            {
-                Marshal.ReleaseComObject(outSample);
-                return null;
+                if (HResultExtensions.Failed(hr))
+                {
+                    if (sample is not null) Marshal.ReleaseComObject(sample);
+                    HResultExtensions.ThrowOnFailure(hr);
+                }
+
+                if ((flags & MfNativeMethods.MF_SOURCE_READERF_ERROR) != 0)
+                {
+                    if (sample is not null) Marshal.ReleaseComObject(sample);
+                    throw new InvalidOperationException("Source reader error during encode.");
+                }
+
+                if ((flags & MfNativeMethods.MF_SOURCE_READERF_ENDOFSTREAM) != 0)
+                {
+                    if (sample is not null) Marshal.ReleaseComObject(sample);
+                    break;
+                }
+
+                if (sample is null)
+                    continue;
+
+                try
+                {
+                    var sampleToWrite = sample;
+
+                    if (colorConverter is not null && reusableSample is not null && reusableBuffer is not null)
+                    {
+                        var converted = ConvertSampleReusable(colorConverter, sample, reusableSample, reusableBuffer);
+                        if (converted)
+                        {
+                            reusableSample.SetSampleTime(timestamp);
+                            sample.GetSampleDuration(out var dur);
+                            if (dur > 0)
+                                reusableSample.SetSampleDuration(dur);
+                            sampleToWrite = reusableSample;
+                        }
+                    }
+
+                    HResultExtensions.ThrowOnFailure(writer.WriteSample(streamIndex, sampleToWrite));
+
+                    ReportProgress(progressItem, applyProgress, durationHns, timestamp, ref lastReportedCenti);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(sample);
+                }
             }
-
-            return outSample;
-        }
-        catch
-        {
-            Marshal.ReleaseComObject(outSample);
-            throw;
         }
         finally
         {
-            Marshal.ReleaseComObject(outBuffer);
+            if (reusableBuffer is not null)
+                Marshal.ReleaseComObject(reusableBuffer);
+            if (reusableSample is not null)
+                Marshal.ReleaseComObject(reusableSample);
         }
+    }
+
+    private static bool ConvertSampleReusable(
+        IMFTransform converter, IMFSample inputSample,
+        IMFSample outputSample, IMFMediaBuffer outputBuffer)
+    {
+        var hr = converter.ProcessInput(0, inputSample, 0);
+        if (HResultExtensions.Failed(hr))
+            return false;
+
+        outputBuffer.SetCurrentLength(0);
+
+        var outputBuf = new MFT_OUTPUT_DATA_BUFFER
+        {
+            dwStreamID = 0,
+            pSample = outputSample,
+            dwStatus = 0,
+            pEvents = null
+        };
+
+        hr = converter.ProcessOutput(0, 1, ref outputBuf, out _);
+
+        return HResultExtensions.Succeeded(hr);
     }
 
     private static void ReportProgress(
@@ -438,69 +577,6 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
             applyProgress);
     }
 
-    private void CaptureOutputChunked(string outputPath, ProxyCacheEntry entry)
-    {
-        using var fileHandle = File.OpenHandle(outputPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var fileSize = RandomAccess.GetLength(fileHandle);
-
-        if (_memoryBudget.TryAllocate(fileSize))
-        {
-            byte[]? rented = null;
-            try
-            {
-                var exactSize = (int)fileSize;
-                rented = BufferPool.Rent(exactSize);
-                var chunkBuf = _chunkAllocator.Rent();
-                try
-                {
-                    using var readStream = new FileStream(
-                        outputPath, FileMode.Open, FileAccess.Read, FileShare.Read,
-                        _chunkAllocator.ChunkSize, FileOptions.SequentialScan);
-
-                    var totalRead = 0;
-                    int read;
-                    while ((read = readStream.Read(chunkBuf, 0, chunkBuf.Length)) > 0)
-                    {
-                        var toCopy = Math.Min(read, exactSize - totalRead);
-                        if (toCopy <= 0)
-                            break;
-                        Buffer.BlockCopy(chunkBuf, 0, rented, totalRead, toCopy);
-                        totalRead += toCopy;
-                    }
-
-                    var delta = (long)totalRead - fileSize;
-                    if (delta > 0)
-                        _memoryBudget.RecordAllocation(delta);
-                    else if (delta < 0)
-                        _memoryBudget.RecordDeallocation(-delta);
-
-                    entry.SetMemoryData(rented, totalRead);
-                    rented = null;
-                    TryDeleteFile(outputPath);
-                }
-                finally
-                {
-                    _chunkAllocator.Return(chunkBuf);
-                }
-            }
-            catch
-            {
-                if (rented is not null)
-                    BufferPool.Return(rented);
-                _memoryBudget.RecordDeallocation(fileSize);
-                throw;
-            }
-        }
-        else if (_config.EnableDiskFallback)
-        {
-            entry.SetDiskPath(outputPath, fileSize);
-        }
-        else
-        {
-            throw new InvalidOperationException("Insufficient memory for proxy and disk fallback is disabled.");
-        }
-    }
-
     internal static uint AlignTo16(uint value)
     {
         var aligned = (value + 15u) & ~15u;
@@ -511,27 +587,6 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
     {
         if (string.IsNullOrEmpty(inputPath) || !Path.IsPathFullyQualified(inputPath))
             throw new ArgumentException("Input path must be a fully qualified absolute path.", nameof(inputPath));
-    }
-
-    private void ValidateTempPath(string tempPath)
-    {
-        var fullTemp = Path.GetFullPath(tempPath);
-        var fullDir = Path.GetFullPath(_fallbackDirectory);
-        Span<char> dirWithSep = stackalloc char[fullDir.Length + 1];
-        fullDir.AsSpan().CopyTo(dirWithSep);
-        dirWithSep[fullDir.Length] = Path.DirectorySeparatorChar;
-        if (!fullTemp.AsSpan().StartsWith(dirWithSep, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Temporary path is outside the designated fallback directory.");
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch { }
     }
 
     public void Dispose()

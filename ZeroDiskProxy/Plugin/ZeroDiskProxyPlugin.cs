@@ -58,19 +58,19 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
             if (cached is { IsValid: true })
                 return LoadFromCache(devices, cached, host.FallbackDirectory);
 
-            host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
-
-            var streamSource = CreateLightweightSource(devices, filePath);
-            if (streamSource is not null)
-                return new ZeroDiskProxyVideoSource(streamSource, devices,
-                    () => TryLoadProxy(devices, filePath, proxyScale, host));
-
-            var fallback = WrapFromOther(devices, filePath);
-            if (fallback is null)
+            var initialSource = CreateLightweightSource(devices, filePath)
+                                ?? WrapFromOther(devices, filePath);
+            if (initialSource is null)
                 return null;
 
-            return new ZeroDiskProxyVideoSource(fallback, devices,
-                () => TryLoadProxy(devices, filePath, proxyScale, host));
+            var generationStarted = 0;
+            return new ZeroDiskProxyVideoSource(initialSource, devices,
+                () =>
+                {
+                    if (Interlocked.Exchange(ref generationStarted, 1) == 0)
+                        host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
+                    return TryLoadProxy(devices, filePath, proxyScale, host);
+                });
         }
 
         if (settings.AutoGenerate)
@@ -78,7 +78,7 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
             if (!host.CacheManager.ProxyExists(filePath, proxyScale))
                 host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
 
-            return CreateLightweightSource(devices, filePath);
+            return WrapFromOther(devices, filePath);
         }
 
         return null;
@@ -104,6 +104,7 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
         try
         {
             var tempPath = entry.GetOrCreateTempFilePath(fallbackDir);
+
             var source = LoadRaw(devices, tempPath);
             if (source is null)
                 return null;

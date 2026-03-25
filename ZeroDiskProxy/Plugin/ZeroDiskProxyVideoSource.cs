@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Vortice.Direct2D1;
 using Vortice.Direct2D1.Effects;
 using YukkuriMovieMaker.Commons;
@@ -10,7 +11,7 @@ namespace ZeroDiskProxy.Plugin;
 internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
 {
     private IVideoFileSource _inner;
-    private readonly Func<IVideoFileSource?>? _tryUpgradeSource;
+    private Func<IVideoFileSource?>? _tryUpgradeSource;
     private readonly AffineTransform2D _switchEffect;
     private readonly ID2D1Image _output;
     private List<IVideoFileSource>? _retiredSources;
@@ -80,10 +81,14 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
             {
                 if (!_upgraded && Volatile.Read(ref _disposed) == 0)
                 {
-                    (_retiredSources ??= []).Add(_inner);
+                    var old = _inner;
                     _inner = pending;
                     _switchEffect.SetInput(0, pending.Output, true);
                     _upgraded = true;
+                    _tryUpgradeSource = null;
+                    _retiredSources = null;
+                    old.Dispose();
+                    ThreadPool.QueueUserWorkItem(static _ => ForceMemoryReclaim());
                 }
                 else
                 {
@@ -153,4 +158,29 @@ internal sealed class ZeroDiskProxyVideoSource : IVideoFileSource
 
         GC.SuppressFinalize(this);
     }
+    private static void ForceMemoryReclaim()
+    {
+        try
+        {
+            GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, true, true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(1, GCCollectionMode.Forced, true);
+
+            try
+            {
+                EmptyWorkingSet(GetCurrentProcess());
+            }
+            catch { }
+        }
+        catch { }
+    }
+
+    [DllImport("kernel32")]
+    private static extern nint GetCurrentProcess();
+
+    [DllImport("psapi")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EmptyWorkingSet(nint hProcess);
 }
