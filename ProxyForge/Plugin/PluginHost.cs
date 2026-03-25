@@ -3,6 +3,7 @@ using ProxyForge.Core;
 using ProxyForge.Detection;
 using ProxyForge.Interfaces;
 using ProxyForge.Memory;
+using ProxyForge.Services;
 using ProxyForge.Settings;
 using ProxyForge.Streaming;
 using ProxyForge.ViewModels;
@@ -60,6 +61,7 @@ internal sealed class PluginHost : IDisposable
         var chunkAllocator = new ChunkAllocator(65536);
 
         MfSession.AddRef();
+        WindowThemeRegistry.Register(new WindowThemeService());
 
         IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
             budget,
@@ -124,6 +126,7 @@ internal sealed class PluginHost : IDisposable
         {
             var vm = new GenerationPopupViewModel(CacheManager.ActiveGenerations);
             _popupView = new GenerationPopupView(vm);
+            WindowThemeRegistry.Bind(_popupView);
 
             var mainWindow = Application.Current?.MainWindow;
             if (mainWindow is { IsLoaded: true })
