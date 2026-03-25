@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using YukkuriMovieMaker.Commons;
+using ZeroDiskProxy.Cache;
 using ZeroDiskProxy.Core;
 using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Localization;
@@ -13,6 +14,7 @@ internal sealed class SettingsViewModel : Bindable
 {
     private readonly ProxyCacheManager? _cacheManager;
     private readonly MemoryBudget? _budget;
+    private readonly VideoCacheDatabase? _videoCache;
     private readonly IDialogService _dialogService;
 
     private string _cacheSummaryText = Translate.CacheSummaryLoading;
@@ -38,18 +40,39 @@ internal sealed class SettingsViewModel : Bindable
 
     public ObservableCollection<CacheEntryViewModel> CacheEntries { get; } = [];
 
+    private string _videoCacheSummaryText = "";
+    public string VideoCacheSummaryText
+    {
+        get => _videoCacheSummaryText;
+        set => Set(ref _videoCacheSummaryText, value);
+    }
+
+    private bool _hasVideoCacheEntries;
+    public bool HasVideoCacheEntries
+    {
+        get => _hasVideoCacheEntries;
+        set => Set(ref _hasVideoCacheEntries, value);
+    }
+
+    public ObservableCollection<VideoCacheEntryViewModel> VideoCacheEntries { get; } = [];
+
     public ICommand ClearCacheCommand { get; }
     public ICommand RefreshCacheInfoCommand { get; }
     public ICommand RemoveCacheEntryCommand { get; }
+    public ICommand ClearVideoCacheCommand { get; }
+    public ICommand RemoveVideoCacheEntryCommand { get; }
 
-    internal SettingsViewModel(ProxyCacheManager? cacheManager, MemoryBudget? budget, IDialogService dialogService)
+    internal SettingsViewModel(ProxyCacheManager? cacheManager, MemoryBudget? budget, VideoCacheDatabase? videoCache, IDialogService dialogService)
     {
         _cacheManager = cacheManager;
         _budget = budget;
+        _videoCache = videoCache;
         _dialogService = dialogService;
         ClearCacheCommand = new ActionCommand(ExecuteClearCache);
         RefreshCacheInfoCommand = new ActionCommand(ExecuteRefreshCacheInfo);
         RemoveCacheEntryCommand = new ActionCommand<CacheEntryViewModel>(ExecuteRemoveEntry);
+        ClearVideoCacheCommand = new ActionCommand(ExecuteClearVideoCache);
+        RemoveVideoCacheEntryCommand = new ActionCommand<VideoCacheEntryViewModel>(ExecuteRemoveVideoCacheEntry);
         ExecuteRefreshCacheInfo();
     }
 
@@ -106,6 +129,8 @@ internal sealed class SettingsViewModel : Bindable
             CacheEntries.Add(new CacheEntryViewModel(snap));
 
         HasCacheEntries = CacheEntries.Count > 0;
+
+        RefreshVideoCacheInfo();
     }
 
     private void ExecuteRemoveEntry(CacheEntryViewModel? entry)
@@ -115,6 +140,58 @@ internal sealed class SettingsViewModel : Bindable
 
         _cacheManager.RemoveProxy(entry.OriginalPath, entry.Scale);
         ExecuteRefreshCacheInfo();
+    }
+
+    private void ExecuteClearVideoCache()
+    {
+        if (_videoCache is null)
+            return;
+
+        var count = _videoCache.ClearAll();
+        if (count == 0)
+            _dialogService.ShowInformation(Translate.VideoCacheListEmpty, Translate.AppName);
+        else
+            _dialogService.ShowInformation(
+                string.Format(Translate.CacheDeleteSummaryFormat, count.ToString("N0"), ""),
+                Translate.AppName);
+
+        ExecuteRefreshCacheInfo();
+    }
+
+    private void ExecuteRemoveVideoCacheEntry(VideoCacheEntryViewModel? entry)
+    {
+        if (entry is null || _videoCache is null)
+            return;
+
+        _videoCache.Remove(entry.Uuid);
+        ExecuteRefreshCacheInfo();
+    }
+
+    private void RefreshVideoCacheInfo()
+    {
+        VideoCacheEntries.Clear();
+
+        if (_videoCache is null)
+        {
+            VideoCacheSummaryText = "";
+            HasVideoCacheEntries = false;
+            return;
+        }
+
+        var entries = _videoCache.GetAll();
+        long totalSize = 0;
+        foreach (var e in entries)
+        {
+            totalSize += e.FileSize;
+            VideoCacheEntries.Add(new VideoCacheEntryViewModel(e));
+        }
+
+        VideoCacheSummaryText = string.Format(
+            Translate.VideoCacheSummaryFormat,
+            entries.Length.ToString("N0"),
+            ByteFormatter.Format(totalSize));
+
+        HasVideoCacheEntries = entries.Length > 0;
     }
 }
 
@@ -131,6 +208,25 @@ internal sealed class CacheEntryViewModel(CacheEntrySnapshot snapshot) : Bindabl
     public string CreatedAtText { get; } = snapshot.CreatedAt.ToLocalTime().ToString("HH:mm:ss");
     public string LastAccessedText { get; } = snapshot.LastAccessedAt.ToLocalTime().ToString("HH:mm:ss");
     public string ScaleText { get; } = string.Create(null, stackalloc char[8], $"{snapshot.Scale * 100:F0}%");
+}
+
+internal sealed class VideoCacheEntryViewModel(VideoCacheLookupResult entry) : Bindable
+{
+    public Guid Uuid { get; } = entry.Uuid;
+    public string FileName { get; } = entry.FileName;
+    public string OriginalPath { get; } = entry.OriginalPath;
+    public float Scale { get; } = entry.Scale;
+    public string Resolution { get; } = entry.ProxyWidth > 0
+        ? string.Create(null, stackalloc char[24], $"{entry.ProxyWidth}\u00d7{entry.ProxyHeight}")
+        : "—";
+    public string StorageType { get; } = Translate.StoragePersistent;
+    public long DataSize { get; } = entry.FileSize;
+    public string DataSizeText { get; } = ByteFormatter.Format(entry.FileSize);
+    public string CreatedAtText { get; } = entry.CreatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm");
+    public string LastAccessedText { get; } = entry.LastAccessedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm");
+    public string ScaleText { get; } = entry.Scale > 0
+        ? string.Create(null, stackalloc char[8], $"{entry.Scale * 100:F0}%")
+        : "—";
 }
 
 internal sealed class ActionCommand(Action execute) : ICommand

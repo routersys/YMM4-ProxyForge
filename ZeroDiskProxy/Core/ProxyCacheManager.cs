@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using ZeroDiskProxy.Cache;
 using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Localization;
 using ZeroDiskProxy.Progress;
@@ -25,14 +26,18 @@ internal sealed class ProxyCacheManager : IDisposable
     private readonly ConcurrentDictionary<CacheKey, ProxyCacheEntry> _cache = new();
     private readonly ConcurrentDictionary<CacheKey, CancellationTokenSource> _pendingGenerations = new();
     private readonly IProxyEncoderFactory _encoderFactory;
+    private readonly VideoCacheDatabase? _videoCache;
+    private readonly string _tmpDirectory;
     private int _disposed;
 
     internal ObservableCollection<ProxyGenerationItem> ActiveGenerations { get; } = [];
     internal event Action<string, ProxyCacheEntry>? ProxyCompleted;
 
-    internal ProxyCacheManager(IProxyEncoderFactory encoderFactory)
+    internal ProxyCacheManager(IProxyEncoderFactory encoderFactory, VideoCacheDatabase? videoCache = null, string tmpDirectory = "")
     {
         _encoderFactory = encoderFactory;
+        _videoCache = videoCache;
+        _tmpDirectory = tmpDirectory;
     }
 
     private static CacheKey MakeKey(string path, float scale) =>
@@ -47,13 +52,46 @@ internal sealed class ProxyCacheManager : IDisposable
     internal ProxyCacheEntry? TryGetProxy(string originalPath, float scale)
     {
         var key = MakeKey(originalPath, scale);
-        return _cache.TryGetValue(key, out var entry) && entry.IsValid ? entry : null;
+        if (_cache.TryGetValue(key, out var entry) && entry.IsValid)
+            return entry;
+
+        if (_videoCache is not null &&
+            ZeroDiskProxySettings.Default.EnableVideoCache &&
+            _videoCache.TryGet(originalPath, scale, out var dbResult))
+        {
+            var cachePath = _videoCache.GetCacheFilePath(dbResult.Uuid);
+            if (File.Exists(cachePath))
+            {
+                var diskEntry = new ProxyCacheEntry(originalPath, scale)
+                {
+                    ProxyWidth = dbResult.ProxyWidth,
+                    ProxyHeight = dbResult.ProxyHeight
+                };
+                diskEntry.SetDiskPath(cachePath, dbResult.FileSize);
+                diskEntry.MarkPersistent();
+                var stored = _cache.GetOrAdd(key, diskEntry);
+                if (!ReferenceEquals(stored, diskEntry))
+                    diskEntry.Dispose();
+                _videoCache.UpdateLastAccess(dbResult.Uuid);
+                return stored.IsValid ? stored : null;
+            }
+        }
+
+        return null;
     }
 
     internal bool ProxyExists(string originalPath, float scale)
     {
         var key = MakeKey(originalPath, scale);
-        return _cache.TryGetValue(key, out var entry) && entry.IsValid;
+        if (_cache.TryGetValue(key, out var entry) && entry.IsValid)
+            return true;
+
+        if (_videoCache is not null &&
+            ZeroDiskProxySettings.Default.EnableVideoCache &&
+            _videoCache.TryGet(originalPath, scale, out _))
+            return true;
+
+        return false;
     }
 
     internal void StartProxyGeneration(string originalPath, float scale, ZeroDiskProxySettings settings)
@@ -93,6 +131,9 @@ internal sealed class ProxyCacheManager : IDisposable
             var stored = _cache.GetOrAdd(key, entry);
             if (!ReferenceEquals(stored, entry))
                 entry.Dispose();
+
+            if (_videoCache is not null && ZeroDiskProxySettings.Default.EnableVideoCache)
+                PersistToVideoCache(originalPath, scale, stored);
 
             var isInMem = stored.IsInMemory;
             DispatchInvoke(() =>
@@ -152,6 +193,8 @@ internal sealed class ProxyCacheManager : IDisposable
         var key = MakeKey(originalPath, scale);
         if (_cache.TryRemove(key, out var entry))
             entry.Dispose();
+
+        _videoCache?.RemoveByPath(originalPath);
     }
 
     internal (int count, long totalSize) ClearAll()
@@ -182,17 +225,40 @@ internal sealed class ProxyCacheManager : IDisposable
 
     internal CacheEntrySnapshot[] GetAllSnapshots()
     {
-        if (_cache.IsEmpty)
-            return [];
+        var resultList = new List<CacheEntrySnapshot>();
 
-        var result = new List<CacheEntrySnapshot>();
         foreach (var entry in _cache.Values)
         {
             if (entry.IsValid)
-                result.Add(entry.CreateSnapshot());
+                resultList.Add(entry.CreateSnapshot());
         }
 
-        return result.Count > 0 ? [.. result] : [];
+        if (_videoCache is not null && ZeroDiskProxySettings.Default.EnableVideoCache)
+        {
+            var dbEntries = _videoCache.GetAll();
+            foreach (var db in dbEntries)
+            {
+                var alreadyInMemory = false;
+                foreach (var existing in resultList)
+                {
+                    if (string.Equals(existing.OriginalPath, db.OriginalPath, StringComparison.OrdinalIgnoreCase) &&
+                        existing.Scale == db.Scale)
+                    {
+                        alreadyInMemory = true;
+                        break;
+                    }
+                }
+                if (!alreadyInMemory)
+                {
+                    resultList.Add(new CacheEntrySnapshot(
+                        db.OriginalPath, db.FileName, db.Scale,
+                        db.ProxyWidth, db.ProxyHeight,
+                        false, db.FileSize, db.CreatedAt, db.LastAccessedAt));
+                }
+            }
+        }
+
+        return resultList.Count > 0 ? [.. resultList] : [];
     }
 
     internal (int entryCount, long memSize, long diskSize, int memCount, int diskCount) GetCacheInfo()
@@ -225,4 +291,43 @@ internal sealed class ProxyCacheManager : IDisposable
 
         ClearAll();
     }
+
+    private void PersistToVideoCache(string originalPath, float scale, ProxyCacheEntry entry)
+    {
+        if (_videoCache is null)
+            return;
+
+        try
+        {
+            var uuid = Guid.NewGuid();
+            var diskStore = _videoCache.DiskStore;
+            var destPath = diskStore.GetFilePath(uuid);
+
+            var tmpPath = entry.GetCurrentDiskPath();
+            if (tmpPath is not null && File.Exists(tmpPath) && IsTmpFile(tmpPath))
+            {
+                File.Move(tmpPath, destPath, true);
+                entry.ReplaceDiskPath(destPath);
+            }
+            else
+            {
+                using var stream = entry.OpenReadStream();
+                diskStore.SaveFromStream(uuid, stream);
+            }
+
+            var fileCrc = diskStore.ComputeFileCrc32FromPath(destPath);
+            var fileSize = new FileInfo(destPath).Length;
+
+            _videoCache.Add(originalPath, scale, entry.ProxyWidth, entry.ProxyHeight,
+                fileSize, fileCrc, uuid);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(string.Concat("[ProxyCacheManager] PersistToVideoCache failed: ", ex.Message));
+        }
+    }
+
+    private bool IsTmpFile(string path) =>
+        !string.IsNullOrEmpty(_tmpDirectory) &&
+        path.StartsWith(_tmpDirectory, StringComparison.OrdinalIgnoreCase);
 }

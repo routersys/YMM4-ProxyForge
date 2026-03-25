@@ -320,6 +320,77 @@
                 </StackPanel>
             </Expander>
 
+            <Expander Header="{x:Static local:Translate.SectionVideoCacheHeader}" IsExpanded="True">
+                <StackPanel Margin="4,4,4,0">
+                    <TextBlock Text="{x:Static local:Translate.SectionVideoCacheDescription}" Style="{StaticResource SectionDesc}"/>
+
+                    <Grid Style="{StaticResource SettingRow}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Label Content="{x:Static local:Translate.SettingEnableVideoCacheLabel}" Style="{StaticResource SettingLabel}"
+                                   ToolTip="{x:Static local:Translate.SettingEnableVideoCacheTooltip}"/>
+                        </StackPanel>
+                        <c:ToggleSlider Value="{Binding Source={x:Static settings:ZeroDiskProxySettings.Default}, Path=EnableVideoCache}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <Border Style="{StaticResource Divider}" Margin="0,0,0,4"/>
+
+                    <TextBlock Text="{Binding VideoCacheSummaryText}" FontSize="12" Margin="0,0,0,4" TextWrapping="Wrap"/>
+
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button Content="{x:Static local:Translate.ButtonRefreshInfo}" Command="{Binding RefreshCacheInfoCommand}" Width="140" Margin="0,0,8,0"/>
+                        <Button Content="{x:Static local:Translate.ButtonClearVideoCache}" Command="{Binding ClearVideoCacheCommand}" Width="140"/>
+                    </WrapPanel>
+
+                    <Border Style="{StaticResource Divider}" Margin="0,0,0,4"/>
+
+                    <TextBlock Text="{x:Static local:Translate.VideoCacheListHeader}" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,4"/>
+
+                    <ScrollViewer MaxHeight="250" VerticalScrollBarVisibility="Auto" Style="{StaticResource ThinScrollViewer}">
+                        <Grid>
+                            <ItemsControl ItemsSource="{Binding VideoCacheEntries}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CacheItemBorder}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding FileName}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock FontSize="10" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" Margin="0,2,0,0">
+                                                        <Run Text="{Binding StorageType, Mode=OneWay}"/>
+                                                        <Run Text="  "/>
+                                                        <Run Text="{Binding Resolution, Mode=OneWay}"/>
+                                                        <Run Text="  "/>
+                                                        <Run Text="{Binding ScaleText, Mode=OneWay}"/>
+                                                        <Run Text="  "/>
+                                                        <Run Text="{Binding DataSizeText, Mode=OneWay}"/>
+                                                        <Run Text="  "/>
+                                                        <Run Text="{Binding CreatedAtText, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+
+                                                <Button Grid.Column="1" Content="✕" VerticalAlignment="Center"
+                                                        Style="{StaticResource RemoveButton}"
+                                                        Command="{Binding DataContext.RemoveVideoCacheEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="{x:Static local:Translate.VideoCacheListEmpty}" FontSize="11"
+                                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                                       HorizontalAlignment="Center" Margin="0,8"
+                                       Visibility="{Binding HasVideoCacheEntries, Converter={StaticResource InvertBoolToVis}}"/>
+                        </Grid>
+                    </ScrollViewer>
+                </StackPanel>
+            </Expander>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -110,4 +110,13 @@
 <data name="ButtonClearCache" xml:space="preserve"><value>Hapus Cache</value></data>
 <data name="CacheListHeader" xml:space="preserve"><value>Daftar Cache</value></data>
 <data name="CacheListEmpty" xml:space="preserve"><value>Tidak ada cache.</value></data>
+<data name="SectionVideoCacheHeader" xml:space="preserve"><value>Cache Video</value></data>
+<data name="SectionVideoCacheDescription" xml:space="preserve"><value>Simpan video proksi ke disk untuk mengurangi waktu startup</value></data>
+<data name="SettingEnableVideoCacheLabel" xml:space="preserve"><value>Aktifkan Cache Video</value></data>
+<data name="SettingEnableVideoCacheTooltip" xml:space="preserve"><value>Simpan video proksi ke disk dan muat otomatis saat startup berikutnya.&amp;#10;Menghilangkan regenerasi.</value></data>
+<data name="VideoCacheSummaryFormat" xml:space="preserve"><value>Cache persisten: {0} item ({1})</value></data>
+<data name="VideoCacheListHeader" xml:space="preserve"><value>Daftar Cache Persisten</value></data>
+<data name="VideoCacheListEmpty" xml:space="preserve"><value>Tidak ada cache persisten.</value></data>
+<data name="ButtonClearVideoCache" xml:space="preserve"><value>Hapus Cache Persisten</value></data>
+<data name="StoragePersistent" xml:space="preserve"><value>Persisten</value></data>
 </root>

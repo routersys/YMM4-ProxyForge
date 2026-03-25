@@ -94,5 +94,12 @@ internal sealed class ZeroDiskProxySettings : SettingsBase<ZeroDiskProxySettings
         set => Set(ref _enableDiskFallback, value);
     }
 
+    private bool _enableVideoCache = true;
+    public bool EnableVideoCache
+    {
+        get => _enableVideoCache;
+        set => Set(ref _enableVideoCache, value);
+    }
+
     public override void Initialize() { }
 }

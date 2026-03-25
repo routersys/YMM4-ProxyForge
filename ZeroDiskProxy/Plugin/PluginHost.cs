@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using YukkuriMovieMaker.Commons;
+using ZeroDiskProxy.Cache;
 using ZeroDiskProxy.Core;
 using ZeroDiskProxy.Detection;
 using ZeroDiskProxy.Interfaces;
@@ -26,19 +27,25 @@ internal sealed class PluginHost : IDisposable
     internal IExportDetector ExportDetector { get; }
     internal ChunkAllocator ChunkAllocator { get; }
     internal string FallbackDirectory { get; }
+    internal string TmpDirectory { get; }
+    internal VideoCacheDatabase? VideoCache { get; }
 
     private PluginHost(
         MemoryBudget budget,
         IProxyEncoderFactory encoderFactory,
         IExportDetector exportDetector,
         ChunkAllocator chunkAllocator,
-        string fallbackDirectory)
+        string fallbackDirectory,
+        string tmpDirectory,
+        VideoCacheDatabase? videoCache)
     {
         Budget = budget;
         ExportDetector = exportDetector;
         ChunkAllocator = chunkAllocator;
         FallbackDirectory = fallbackDirectory;
-        CacheManager = new ProxyCacheManager(encoderFactory);
+        TmpDirectory = tmpDirectory;
+        VideoCache = videoCache;
+        CacheManager = new ProxyCacheManager(encoderFactory, videoCache, tmpDirectory);
 
         CacheManager.ActiveGenerations.CollectionChanged += OnGenerationsChanged;
     }
@@ -48,20 +55,31 @@ internal sealed class PluginHost : IDisposable
         var settings = ZeroDiskProxySettings.Default;
         var budget = new MemoryBudget(settings.MemoryReserveMb, settings.MaxCacheMemoryMb);
         var pluginDir = Path.GetDirectoryName(typeof(PluginHost).Assembly.Location) ?? AppDirectories.TemporaryDirectory;
-        var fallbackDirectory = Path.Combine(pluginDir, "ZeroDiskProxyTemp");
+        var cacheDir = Path.Combine(pluginDir, "cache");
+        var tmpDirectory = Path.Combine(cacheDir, "tmp");
         var chunkAllocator = new ChunkAllocator(65536);
 
         MfSession.AddRef();
 
         IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
             budget,
-            fallbackDirectory,
+            tmpDirectory,
             static () => new EncoderConfig(
                 ZeroDiskProxySettings.Default.EnableHardwareAcceleration,
                 ZeroDiskProxySettings.Default.EnableDiskFallback));
 
+        VideoCacheDatabase? videoCache = null;
+        if (settings.EnableVideoCache)
+        {
+            try
+            {
+                videoCache = new VideoCacheDatabase(cacheDir);
+            }
+            catch { }
+        }
+
         IExportDetector exportDetector = new ExportDetector();
-        return new PluginHost(budget, encoderFactory, exportDetector, chunkAllocator, fallbackDirectory);
+        return new PluginHost(budget, encoderFactory, exportDetector, chunkAllocator, tmpDirectory, tmpDirectory, videoCache);
     }
 
     internal static PluginHost EnsureInitialized()
@@ -142,20 +160,21 @@ internal sealed class PluginHost : IDisposable
         });
 
         CacheManager.Dispose();
+        VideoCache?.Dispose();
         ChunkAllocator.Dispose();
-        CleanupFallbackDirectory();
+        CleanupTmpDirectory();
 
         MfSession.Release();
     }
 
-    private void CleanupFallbackDirectory()
+    private void CleanupTmpDirectory()
     {
         try
         {
-            if (!Directory.Exists(FallbackDirectory))
+            if (!Directory.Exists(TmpDirectory))
                 return;
 
-            foreach (var file in Directory.GetFiles(FallbackDirectory))
+            foreach (var file in Directory.GetFiles(TmpDirectory))
             {
                 try { File.Delete(file); }
                 catch { }

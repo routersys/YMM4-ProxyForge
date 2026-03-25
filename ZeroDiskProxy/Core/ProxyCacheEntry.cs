@@ -17,6 +17,7 @@ internal sealed class ProxyCacheEntry : IDisposable
     private int _disposed;
     private int _streamCount;
     private int _releaseMemoryWhenPossible;
+    private int _persistentDiskEntry;
 
     internal string OriginalPath { get; }
     internal float Scale { get; }
@@ -60,6 +61,18 @@ internal sealed class ProxyCacheEntry : IDisposable
         Volatile.Write(ref _releaseMemoryWhenPossible, 1);
         TryReturnBuffer();
         UpdateLastAccess();
+    }
+
+    internal void MarkPersistent() =>
+        Volatile.Write(ref _persistentDiskEntry, 1);
+
+    internal string? GetCurrentDiskPath() =>
+        Volatile.Read(ref _diskPath);
+
+    internal void ReplaceDiskPath(string newPath)
+    {
+        Volatile.Write(ref _diskPath, newPath);
+        MarkPersistent();
     }
 
     internal Stream OpenReadStream()
@@ -183,7 +196,7 @@ internal sealed class ProxyCacheEntry : IDisposable
         TryReturnBuffer();
 
         var disk = Interlocked.Exchange(ref _diskPath, null);
-        if (disk is null)
+        if (disk is null || Volatile.Read(ref _persistentDiskEntry) != 0)
             return;
 
         try

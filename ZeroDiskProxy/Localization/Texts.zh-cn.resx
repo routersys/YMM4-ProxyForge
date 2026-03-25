@@ -110,4 +110,13 @@
 <data name="ButtonClearCache" xml:space="preserve"><value>清除缓存</value></data>
 <data name="CacheListHeader" xml:space="preserve"><value>缓存列表</value></data>
 <data name="CacheListEmpty" xml:space="preserve"><value>没有缓存。</value></data>
+<data name="SectionVideoCacheHeader" xml:space="preserve"><value>视频缓存</value></data>
+<data name="SectionVideoCacheDescription" xml:space="preserve"><value>将代理视频持久保存到磁盘以缩短启动时间</value></data>
+<data name="SettingEnableVideoCacheLabel" xml:space="preserve"><value>启用视频缓存</value></data>
+<data name="SettingEnableVideoCacheTooltip" xml:space="preserve"><value>将代理视频保存到磁盘并在下次启动时自动加载。&amp;#10;免去重新生成。</value></data>
+<data name="VideoCacheSummaryFormat" xml:space="preserve"><value>持久缓存: {0} 项（{1}）</value></data>
+<data name="VideoCacheListHeader" xml:space="preserve"><value>持久缓存列表</value></data>
+<data name="VideoCacheListEmpty" xml:space="preserve"><value>没有持久缓存。</value></data>
+<data name="ButtonClearVideoCache" xml:space="preserve"><value>清除持久缓存</value></data>
+<data name="StoragePersistent" xml:space="preserve"><value>持久</value></data>
 </root>

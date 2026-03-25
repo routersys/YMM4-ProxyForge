@@ -110,4 +110,13 @@
 <data name="ButtonClearCache" xml:space="preserve"><value>キャッシュをクリア</value></data>
 <data name="CacheListHeader" xml:space="preserve"><value>キャッシュ一覧</value></data>
 <data name="CacheListEmpty" xml:space="preserve"><value>キャッシュはありません</value></data>
+<data name="SectionVideoCacheHeader" xml:space="preserve"><value>映像キャッシュ</value></data>
+<data name="SectionVideoCacheDescription" xml:space="preserve"><value>プロキシ動画をディスクに永続保存し起動時間を短縮します</value></data>
+<data name="SettingEnableVideoCacheLabel" xml:space="preserve"><value>映像キャッシュを有効にする</value></data>
+<data name="SettingEnableVideoCacheTooltip" xml:space="preserve"><value>プロキシ動画をディスクに保存し次回起動時に自動ロードします。&amp;#10;生成の手間を省きます。</value></data>
+<data name="VideoCacheSummaryFormat" xml:space="preserve"><value>永続キャッシュ: {0} 件 ({1})</value></data>
+<data name="VideoCacheListHeader" xml:space="preserve"><value>永続キャッシュ一覧</value></data>
+<data name="VideoCacheListEmpty" xml:space="preserve"><value>永続キャッシュはありません</value></data>
+<data name="ButtonClearVideoCache" xml:space="preserve"><value>永続キャッシュをクリア</value></data>
+<data name="StoragePersistent" xml:space="preserve"><value>永続</value></data>
 </root>

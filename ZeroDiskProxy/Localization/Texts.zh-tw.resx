@@ -110,4 +110,13 @@
 <data name="ButtonClearCache" xml:space="preserve"><value>清除快取</value></data>
 <data name="CacheListHeader" xml:space="preserve"><value>快取清單</value></data>
 <data name="CacheListEmpty" xml:space="preserve"><value>沒有快取。</value></data>
+<data name="SectionVideoCacheHeader" xml:space="preserve"><value>影片快取</value></data>
+<data name="SectionVideoCacheDescription" xml:space="preserve"><value>將代理影片永久保存到磁碟以縮短啟動時間</value></data>
+<data name="SettingEnableVideoCacheLabel" xml:space="preserve"><value>啟用影片快取</value></data>
+<data name="SettingEnableVideoCacheTooltip" xml:space="preserve"><value>將代理影片儲存到磁碟並在下次啟動時自動載入。&amp;#10;免去重新產生。</value></data>
+<data name="VideoCacheSummaryFormat" xml:space="preserve"><value>永久快取: {0} 項（{1}）</value></data>
+<data name="VideoCacheListHeader" xml:space="preserve"><value>永久快取清單</value></data>
+<data name="VideoCacheListEmpty" xml:space="preserve"><value>沒有永久快取。</value></data>
+<data name="ButtonClearVideoCache" xml:space="preserve"><value>清除永久快取</value></data>
+<data name="StoragePersistent" xml:space="preserve"><value>永久</value></data>
 </root>

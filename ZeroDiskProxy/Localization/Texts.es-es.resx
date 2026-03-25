@@ -110,4 +110,13 @@
 <data name="ButtonClearCache" xml:space="preserve"><value>Borrar caché</value></data>
 <data name="CacheListHeader" xml:space="preserve"><value>Lista de caché</value></data>
 <data name="CacheListEmpty" xml:space="preserve"><value>No hay caché.</value></data>
+<data name="SectionVideoCacheHeader" xml:space="preserve"><value>Caché de video</value></data>
+<data name="SectionVideoCacheDescription" xml:space="preserve"><value>Guarda videos proxy en disco para reducir el tiempo de inicio</value></data>
+<data name="SettingEnableVideoCacheLabel" xml:space="preserve"><value>Habilitar caché de video</value></data>
+<data name="SettingEnableVideoCacheTooltip" xml:space="preserve"><value>Guarda videos proxy en disco y los carga automáticamente.&amp;#10;Elimina la regeneración.</value></data>
+<data name="VideoCacheSummaryFormat" xml:space="preserve"><value>Caché persistente: {0} elementos ({1})</value></data>
+<data name="VideoCacheListHeader" xml:space="preserve"><value>Lista de caché persistente</value></data>
+<data name="VideoCacheListEmpty" xml:space="preserve"><value>No hay caché persistente.</value></data>
+<data name="ButtonClearVideoCache" xml:space="preserve"><value>Borrar caché persistente</value></data>
+<data name="StoragePersistent" xml:space="preserve"><value>Persistente</value></data>
 </root>
