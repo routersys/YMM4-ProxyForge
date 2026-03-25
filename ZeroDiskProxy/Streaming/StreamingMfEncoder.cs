@@ -1,8 +1,5 @@
 using System.IO;
-using Windows.Foundation;
-using Windows.Media.MediaProperties;
-using Windows.Media.Transcoding;
-using Windows.Storage;
+using System.Runtime.InteropServices;
 using ZeroDiskProxy.Core;
 using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Interop;
@@ -58,57 +55,17 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
             var origWidth = metadata is { IsValid: true, Width: > 0 } ? metadata.Width : 1920u;
             var origHeight = metadata is { IsValid: true, Height: > 0 } ? metadata.Height : 1080u;
             var fps = metadata is { IsValid: true, FrameRate: > 0 } ? metadata.FrameRate : 30.0;
+            var durationHns = metadata is { IsValid: true, DurationHns: > 0 } ? metadata.DurationHns : 0L;
 
             var proxyWidth = AlignTo16((uint)(origWidth * scale));
             var proxyHeight = AlignTo16((uint)(origHeight * scale));
+            var bitrate = Math.Max((uint)(proxyWidth * proxyHeight * fps * 0.07 * bitrateFactor), 100_000u);
 
-            var inputFile = await StorageFile.GetFileFromPathAsync(inputPath);
-            var outputFolder = await StorageFolder.GetFolderFromPathAsync(_fallbackDirectory);
-            var outputFile = await outputFolder.CreateFileAsync(tempFileName, CreationCollisionOption.ReplaceExisting);
-
-            var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
-            profile.Video = VideoEncodingProperties.CreateH264();
-            profile.Video.Width = proxyWidth;
-            profile.Video.Height = proxyHeight;
-            profile.Video.Bitrate = Math.Max((uint)(proxyWidth * proxyHeight * fps * 0.07 * bitrateFactor), 100_000u);
-            profile.Video.FrameRate.Numerator = (uint)Math.Max(1, Math.Round(fps));
-            profile.Video.FrameRate.Denominator = 1;
-            profile.Video.Properties[MfGuids.MF_MT_MAX_KEYFRAME_SPACING] = (uint)Math.Max(1, gopSize);
-            profile.Audio = null;
+            await Task.Run(() => EncodeCore(
+                inputPath, tempPath, proxyWidth, proxyHeight, fps, bitrate, gopSize,
+                durationHns, progressItem, cancellationToken), CancellationToken.None);
 
             cancellationToken.ThrowIfCancellationRequested();
-
-            var transcoder = new MediaTranscoder
-            {
-                HardwareAccelerationEnabled = _config.EnableHardwareAcceleration,
-                VideoProcessingAlgorithm = MediaVideoProcessingAlgorithm.Default
-            };
-
-            var prepResult = await transcoder.PrepareFileTranscodeAsync(inputFile, outputFile, profile);
-
-            if (!prepResult.CanTranscode && _config.EnableHardwareAcceleration)
-            {
-                transcoder.HardwareAccelerationEnabled = false;
-                prepResult = await transcoder.PrepareFileTranscodeAsync(inputFile, outputFile, profile);
-            }
-
-            if (!prepResult.CanTranscode)
-                throw new InvalidOperationException(string.Concat("Transcode failed: ", prepResult.FailureReason.ToString()));
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var transcodeOp = prepResult.TranscodeAsync();
-
-            if (progressItem is not null)
-            {
-                var reporter = new TranscodeProgressReporter(progressItem);
-                transcodeOp.Progress = reporter.Report;
-            }
-
-            using var reg = cancellationToken.Register(
-                static state => ((IAsyncActionWithProgress<double>)state!).Cancel(),
-                transcodeOp);
-            await transcodeOp;
 
             float effectiveScale = (float)proxyWidth / origWidth;
             entry = new ProxyCacheEntry(inputPath, effectiveScale, _memoryBudget.RecordDeallocation)
@@ -125,6 +82,159 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
             entry?.Dispose();
             TryDeleteFile(tempPath);
             throw;
+        }
+    }
+
+    private void EncodeCore(
+        string inputPath, string outputPath,
+        uint proxyWidth, uint proxyHeight, double fps,
+        uint bitrate, int gopSize, long durationHns,
+        ProxyGenerationItem? progressItem, CancellationToken cancellationToken)
+    {
+        IMFSourceReader? reader = null;
+        IMFSinkWriter? writer = null;
+        IMFAttributes? readerAttrs = null;
+        IMFAttributes? writerAttrs = null;
+        IMFMediaType? requestedType = null;
+        IMFMediaType? actualInputType = null;
+        IMFMediaType? outputType = null;
+        IMFAttributes? encoderParams = null;
+
+        try
+        {
+            MfSession.AddRef();
+
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateAttributes(out readerAttrs, 4));
+            readerAttrs.SetUINT32(MfAttributeKeys.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1u);
+            readerAttrs.SetUINT32(MfAttributeKeys.MF_LOW_LATENCY, 1u);
+            readerAttrs.SetUINT32(MfAttributeKeys.MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, _config.EnableHardwareAcceleration ? 1u : 0u);
+
+            HResultExtensions.ThrowOnFailure(
+                MfNativeMethods.MFCreateSourceReaderFromURL(inputPath, readerAttrs, out reader));
+
+            reader.SetStreamSelection(0xFFFFFFFE, false);
+            reader.SetStreamSelection(MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, true);
+
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMediaType(out requestedType));
+            requestedType.SetGUID(MfAttributeKeys.MF_MT_MAJOR_TYPE, MfAttributeKeys.MFMediaType_Video);
+            requestedType.SetGUID(MfAttributeKeys.MF_MT_SUBTYPE, MfAttributeKeys.MFVideoFormat_NV12);
+            requestedType.SetUINT64(MfAttributeKeys.MF_MT_FRAME_SIZE, MfNativeMethods.PackSize(proxyWidth, proxyHeight));
+            requestedType.SetUINT64(MfAttributeKeys.MF_MT_FRAME_RATE, MfNativeMethods.PackRatio((uint)Math.Max(1, Math.Round(fps)), 1));
+            requestedType.SetUINT32(MfAttributeKeys.MF_MT_INTERLACE_MODE, 2u);
+
+            var setHr = reader.SetCurrentMediaType(
+                MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, nint.Zero, requestedType);
+
+            if (HResultExtensions.Failed(setHr))
+            {
+                Marshal.ReleaseComObject(requestedType);
+                requestedType = null;
+                HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMediaType(out requestedType));
+                requestedType.SetGUID(MfAttributeKeys.MF_MT_MAJOR_TYPE, MfAttributeKeys.MFMediaType_Video);
+                requestedType.SetGUID(MfAttributeKeys.MF_MT_SUBTYPE, MfAttributeKeys.MFVideoFormat_RGB32);
+                requestedType.SetUINT64(MfAttributeKeys.MF_MT_FRAME_SIZE, MfNativeMethods.PackSize(proxyWidth, proxyHeight));
+                requestedType.SetUINT32(MfAttributeKeys.MF_MT_INTERLACE_MODE, 2u);
+                HResultExtensions.ThrowOnFailure(
+                    reader.SetCurrentMediaType(MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, nint.Zero, requestedType));
+            }
+
+            HResultExtensions.ThrowOnFailure(
+                reader.GetCurrentMediaType(MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM, out actualInputType));
+
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateAttributes(out writerAttrs, 4));
+            writerAttrs.SetUINT32(MfAttributeKeys.MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, _config.EnableHardwareAcceleration ? 1u : 0u);
+            writerAttrs.SetUINT32(MfAttributeKeys.MF_SINK_WRITER_DISABLE_THROTTLING, 1u);
+
+            HResultExtensions.ThrowOnFailure(
+                MfNativeMethods.MFCreateSinkWriterFromURL(outputPath, nint.Zero, writerAttrs, out writer));
+
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateMediaType(out outputType));
+            outputType.SetGUID(MfAttributeKeys.MF_MT_MAJOR_TYPE, MfAttributeKeys.MFMediaType_Video);
+            outputType.SetGUID(MfAttributeKeys.MF_MT_SUBTYPE, MfAttributeKeys.MFVideoFormat_H264);
+            outputType.SetUINT64(MfAttributeKeys.MF_MT_FRAME_SIZE, MfNativeMethods.PackSize(proxyWidth, proxyHeight));
+            outputType.SetUINT64(MfAttributeKeys.MF_MT_FRAME_RATE, MfNativeMethods.PackRatio((uint)Math.Max(1, Math.Round(fps)), 1));
+            outputType.SetUINT32(MfAttributeKeys.MF_MT_AVG_BITRATE, bitrate);
+            outputType.SetUINT32(MfAttributeKeys.MF_MT_INTERLACE_MODE, 2u);
+            outputType.SetUINT32(MfAttributeKeys.MF_MT_MPEG2_PROFILE, 77u);
+
+            HResultExtensions.ThrowOnFailure(writer.AddStream(outputType, out var streamIndex));
+
+            HResultExtensions.ThrowOnFailure(MfNativeMethods.MFCreateAttributes(out encoderParams, 2));
+            encoderParams.SetUINT32(MfGuids.MF_MT_MAX_KEYFRAME_SPACING, (uint)Math.Max(1, gopSize));
+
+            HResultExtensions.ThrowOnFailure(writer.SetInputMediaType(streamIndex, actualInputType, encoderParams));
+
+            HResultExtensions.ThrowOnFailure(writer.BeginWriting());
+
+            Action? applyProgress = progressItem is not null ? progressItem.ApplyPendingProgress : null;
+            var lastReportedCenti = 0L;
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var hr = reader.ReadSample(
+                    MfNativeMethods.MF_SOURCE_READER_FIRST_VIDEO_STREAM,
+                    0, out _, out var flags, out var timestamp, out var sample);
+
+                if (HResultExtensions.Failed(hr))
+                {
+                    if (sample is not null) Marshal.ReleaseComObject(sample);
+                    HResultExtensions.ThrowOnFailure(hr);
+                }
+
+                if ((flags & MfNativeMethods.MF_SOURCE_READERF_ERROR) != 0)
+                {
+                    if (sample is not null) Marshal.ReleaseComObject(sample);
+                    throw new InvalidOperationException("Source reader error during encode.");
+                }
+
+                if ((flags & MfNativeMethods.MF_SOURCE_READERF_ENDOFSTREAM) != 0)
+                {
+                    if (sample is not null) Marshal.ReleaseComObject(sample);
+                    break;
+                }
+
+                if (sample is null)
+                    continue;
+
+                try
+                {
+                    HResultExtensions.ThrowOnFailure(writer.WriteSample(streamIndex, sample));
+
+                    if (progressItem is not null && durationHns > 0 && applyProgress is not null)
+                    {
+                        var pct = Math.Min(99.0, (double)timestamp / durationHns * 100.0);
+                        var centi = (long)(pct * 100);
+                        if (centi - lastReportedCenti >= 100 || pct >= 99.0)
+                        {
+                            lastReportedCenti = centi;
+                            progressItem.SetPendingProgress(pct);
+                            System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                                System.Windows.Threading.DispatcherPriority.Background,
+                                applyProgress);
+                        }
+                    }
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(sample);
+                }
+            }
+
+            HResultExtensions.ThrowOnFailure(writer.Finalize_());
+        }
+        finally
+        {
+            if (encoderParams is not null) { try { Marshal.ReleaseComObject(encoderParams); } catch { } }
+            if (outputType is not null) { try { Marshal.ReleaseComObject(outputType); } catch { } }
+            if (actualInputType is not null) { try { Marshal.ReleaseComObject(actualInputType); } catch { } }
+            if (requestedType is not null) { try { Marshal.ReleaseComObject(requestedType); } catch { } }
+            if (writer is not null) { try { Marshal.ReleaseComObject(writer); } catch { } }
+            if (writerAttrs is not null) { try { Marshal.ReleaseComObject(writerAttrs); } catch { } }
+            if (reader is not null) { try { Marshal.ReleaseComObject(reader); } catch { } }
+            if (readerAttrs is not null) { try { Marshal.ReleaseComObject(readerAttrs); } catch { } }
+            MfSession.Release();
         }
     }
 
@@ -227,25 +337,5 @@ internal sealed class StreamingMfEncoder : IProxyEncoder
     public void Dispose()
     {
         Interlocked.Exchange(ref _disposed, 1);
-    }
-
-    private sealed class TranscodeProgressReporter(ProxyGenerationItem progressItem)
-    {
-        private readonly Action _dispatchAction = progressItem.ApplyPendingProgress;
-        private long _lastReportedCenti;
-
-        internal void Report(IAsyncActionWithProgress<double> _, double pct)
-        {
-            var p = Math.Min(99.0, pct);
-            var centi = (long)(p * 100);
-            var prev = Volatile.Read(ref _lastReportedCenti);
-            if (centi - prev < 100 && p < 99.0)
-                return;
-            Volatile.Write(ref _lastReportedCenti, centi);
-            progressItem.SetPendingProgress(p);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Background,
-                _dispatchAction);
-        }
     }
 }
