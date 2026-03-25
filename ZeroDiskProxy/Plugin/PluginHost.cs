@@ -7,6 +7,7 @@ using ZeroDiskProxy.Detection;
 using ZeroDiskProxy.Interfaces;
 using ZeroDiskProxy.Memory;
 using ZeroDiskProxy.Settings;
+using ZeroDiskProxy.Streaming;
 using ZeroDiskProxy.ViewModels;
 using ZeroDiskProxy.Views;
 
@@ -23,16 +24,19 @@ internal sealed class PluginHost : IDisposable
     internal MemoryBudget Budget { get; }
     internal ProxyCacheManager CacheManager { get; }
     internal IExportDetector ExportDetector { get; }
+    internal ChunkAllocator ChunkAllocator { get; }
     internal string FallbackDirectory { get; }
 
     private PluginHost(
         MemoryBudget budget,
         IProxyEncoderFactory encoderFactory,
         IExportDetector exportDetector,
+        ChunkAllocator chunkAllocator,
         string fallbackDirectory)
     {
         Budget = budget;
         ExportDetector = exportDetector;
+        ChunkAllocator = chunkAllocator;
         FallbackDirectory = fallbackDirectory;
         CacheManager = new ProxyCacheManager(encoderFactory);
 
@@ -44,14 +48,20 @@ internal sealed class PluginHost : IDisposable
         var settings = ZeroDiskProxySettings.Default;
         var budget = new MemoryBudget(settings.MemoryReserveMb, settings.MaxCacheMemoryMb);
         var fallbackDirectory = Path.Combine(AppDirectories.TemporaryDirectory, "ZeroDiskProxyTemp");
-        IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
+        var chunkAllocator = new ChunkAllocator(65536);
+
+        MfSession.AddRef();
+
+        IProxyEncoderFactory encoderFactory = new StreamingMfEncoderFactory(
             budget,
             fallbackDirectory,
             static () => new EncoderConfig(
                 ZeroDiskProxySettings.Default.EnableHardwareAcceleration,
-                ZeroDiskProxySettings.Default.EnableDiskFallback));
+                ZeroDiskProxySettings.Default.EnableDiskFallback),
+            chunkAllocator);
+
         IExportDetector exportDetector = new ExportDetector();
-        return new PluginHost(budget, encoderFactory, exportDetector, fallbackDirectory);
+        return new PluginHost(budget, encoderFactory, exportDetector, chunkAllocator, fallbackDirectory);
     }
 
     internal static PluginHost EnsureInitialized()
@@ -132,7 +142,10 @@ internal sealed class PluginHost : IDisposable
         });
 
         CacheManager.Dispose();
+        ChunkAllocator.Dispose();
         CleanupFallbackDirectory();
+
+        MfSession.Release();
     }
 
     private void CleanupFallbackDirectory()

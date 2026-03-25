@@ -6,6 +6,7 @@ using YukkuriMovieMaker.Plugin;
 using YukkuriMovieMaker.Plugin.FileSource;
 using ZeroDiskProxy.Core;
 using ZeroDiskProxy.Settings;
+using ZeroDiskProxy.Streaming;
 
 namespace ZeroDiskProxy.Plugin;
 
@@ -59,17 +60,42 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
 
             host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
 
-            var source = WrapFromOther(devices, filePath);
-            if (source is null)
+            var streamSource = CreateLightweightSource(devices, filePath);
+            if (streamSource is not null)
+                return new ZeroDiskProxyVideoSource(streamSource, devices,
+                    () => TryLoadProxy(devices, filePath, proxyScale, host));
+
+            var fallback = WrapFromOther(devices, filePath);
+            if (fallback is null)
                 return null;
 
-            return new ZeroDiskProxyVideoSource(source, devices, () => TryLoadProxy(devices, filePath, proxyScale, host));
+            return new ZeroDiskProxyVideoSource(fallback, devices,
+                () => TryLoadProxy(devices, filePath, proxyScale, host));
         }
 
-        if (settings.AutoGenerate && !host.CacheManager.ProxyExists(filePath, proxyScale))
-            host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
+        if (settings.AutoGenerate)
+        {
+            if (!host.CacheManager.ProxyExists(filePath, proxyScale))
+                host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
+
+            return CreateLightweightSource(devices, filePath);
+        }
 
         return null;
+    }
+
+    private static IVideoFileSource? CreateLightweightSource(
+        IGraphicsDevicesAndContext devices, string filePath)
+    {
+        try
+        {
+            return LightweightVideoFileSource.TryCreate(filePath, devices);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(string.Concat("[ZeroDiskProxy] LightweightSource failed for ", filePath, ": ", ex.Message));
+            return null;
+        }
     }
 
     private static IVideoFileSource? LoadFromCache(
@@ -124,6 +150,10 @@ internal sealed class ZeroDiskProxyPlugin : IVideoFileSourcePlugin
     {
         try
         {
+            var lightSource = CreateLightweightSource(devices, filePath);
+            if (lightSource is not null)
+                return lightSource;
+
             return WrapFromOther(devices, filePath);
         }
         catch (Exception ex)
