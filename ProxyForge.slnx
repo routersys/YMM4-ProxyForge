@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator.csproj" />
+  <Project Path="ProxyForge/ProxyForge.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+</Solution>

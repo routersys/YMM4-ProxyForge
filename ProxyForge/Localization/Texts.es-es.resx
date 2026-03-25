@@ -1,0 +1,122 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+<data name="CurrentCulture" xml:space="preserve"><value>es-es</value></data>
+<data name="AppName" xml:space="preserve"><value>ProxyForge</value></data>
+<data name="SettingsName" xml:space="preserve"><value>Configuración de ProxyForge</value></data>
+<data name="StorageMemory" xml:space="preserve"><value>Memoria</value></data>
+<data name="StorageDisk" xml:space="preserve"><value>Disco</value></data>
+<data name="ProxyGenerationStatusGenerating" xml:space="preserve"><value>Generando...</value></data>
+<data name="ProxyGenerationStatusCompleted" xml:space="preserve"><value>Completado</value></data>
+<data name="ProxyGenerationStatusCanceled" xml:space="preserve"><value>Cancelado</value></data>
+<data name="ProxyGenerationStatusFailedPrefix" xml:space="preserve"><value>Error:</value></data>
+<data name="CacheSummaryLoading" xml:space="preserve"><value>Cargando...</value></data>
+<data name="CacheNoEntriesToDelete" xml:space="preserve"><value>No hay caché para eliminar.</value></data>
+<data name="CacheDeleteSummaryFormat" xml:space="preserve"><value>Se eliminaron {0} elementos ({1}).</value></data>
+<data name="CacheSummaryPluginNotInitialized" xml:space="preserve"><value>Plugin no inicializado</value></data>
+<data name="CacheSummaryCountFormat" xml:space="preserve"><value>Conteo de caché: {0} elementos</value></data>
+<data name="CacheUsageMemoryAndDiskFormat" xml:space="preserve"><value>Memoria: {0} elementos ({1})   Disco: {2} elementos ({3})</value></data>
+<data name="CacheUsageAllocatedFormat" xml:space="preserve"><value>Asignado: {0}</value></data>
+<data name="GenerationPopupWindowTitle" xml:space="preserve"><value>ProxyForge - Generando proxy</value></data>
+<data name="GenerationPopupHeader" xml:space="preserve"><value>Generando video proxy...</value></data>
+<data name="GenerationPopupNoActiveItems" xml:space="preserve"><value>No hay proxies en generación.</value></data>
+<data name="SettingsCardDescription" xml:space="preserve"><value>Acelera la edición con videos proxy basados en memoria</value></data>
+<data name="SectionBasicSettingsHeader" xml:space="preserve"><value>Configuración básica</value></data>
+<data name="SectionBasicSettingsDescription" xml:space="preserve"><value>Configura el comportamiento básico de los videos proxy</value></data>
+<data name="SettingUseProxyLabel" xml:space="preserve"><value>Usar proxy</value></data>
+<data name="SettingUseProxyTooltip" xml:space="preserve"><value>Usa video proxy de baja resolución en memoria durante la edición.&amp;#10;Al exportar cambia automáticamente al original.</value></data>
+<data name="SettingResolutionScaleLabel" xml:space="preserve"><value>Escala de resolución</value></data>
+<data name="SettingResolutionScaleTooltip" xml:space="preserve"><value>Factor de escala de resolución para video proxy</value></data>
+<data name="SettingMinFileSizeLabel" xml:space="preserve"><value>Tamaño mínimo de archivo</value></data>
+<data name="SettingMinFileSizeTooltip" xml:space="preserve"><value>Solo genera proxy para videos mayores que este tamaño</value></data>
+<data name="SectionQualitySettingsHeader" xml:space="preserve"><value>Configuración de calidad</value></data>
+<data name="SectionQualitySettingsDescription" xml:space="preserve"><value>Ajusta el equilibrio entre calidad de codificación y rendimiento</value></data>
+<data name="SettingBitrateFactorLabel" xml:space="preserve"><value>Factor de bitrate</value></data>
+<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>Un valor más alto mejora la calidad pero aumenta el uso de memoria</value></data>
+<data name="SettingGopSizeLabel" xml:space="preserve"><value>Tamaño GOP</value></data>
+<data name="SettingGopSizeTooltip" xml:space="preserve"><value>Intervalo de fotogramas clave</value></data>
+<data name="SectionMemorySettingsHeader" xml:space="preserve"><value>Configuración de memoria</value></data>
+<data name="SectionMemorySettingsDescription" xml:space="preserve"><value>Controla el uso de memoria y el respaldo en disco</value></data>
+<data name="SettingMemoryReserveLabel" xml:space="preserve"><value>Reserva de memoria</value></data>
+<data name="SettingMemoryReserveTooltip" xml:space="preserve"><value>Cambia a disco cuando la memoria cae por debajo de este valor</value></data>
+<data name="SettingMaxCacheMemoryLabel" xml:space="preserve"><value>Máxima memoria de caché</value></data>
+<data name="SettingDiskFallbackLabel" xml:space="preserve"><value>Respaldo en disco</value></data>
+<data name="SettingDiskFallbackTooltip" xml:space="preserve"><value>Crea archivos temporales en disco cuando no hay suficiente memoria</value></data>
+<data name="SectionAutomationSettingsHeader" xml:space="preserve"><value>Configuración de automatización</value></data>
+<data name="SettingAutoGenerateLabel" xml:space="preserve"><value>Generación automática</value></data>
+<data name="SettingClearCacheOnExitLabel" xml:space="preserve"><value>Borrar caché al salir</value></data>
+<data name="SectionAdvancedSettingsHeader" xml:space="preserve"><value>Configuración avanzada</value></data>
+<data name="SettingEnableAdvancedLabel" xml:space="preserve"><value>Habilitar configuración avanzada</value></data>
+<data name="SettingHardwareAccelerationLabel" xml:space="preserve"><value>Aceleración por hardware</value></data>
+<data name="SectionCacheManagementHeader" xml:space="preserve"><value>Gestión de caché</value></data>
+<data name="ButtonRefreshInfo" xml:space="preserve"><value>Actualizar información</value></data>
+<data name="ButtonClearCache" xml:space="preserve"><value>Borrar caché</value></data>
+<data name="CacheListHeader" xml:space="preserve"><value>Lista de caché</value></data>
+<data name="CacheListEmpty" xml:space="preserve"><value>No hay caché.</value></data>
+<data name="SectionVideoCacheHeader" xml:space="preserve"><value>Caché de video</value></data>
+<data name="SectionVideoCacheDescription" xml:space="preserve"><value>Guarda videos proxy en disco para reducir el tiempo de inicio</value></data>
+<data name="SettingEnableVideoCacheLabel" xml:space="preserve"><value>Habilitar caché de video</value></data>
+<data name="SettingEnableVideoCacheTooltip" xml:space="preserve"><value>Guarda videos proxy en disco y los carga automáticamente.&amp;#10;Elimina la regeneración.</value></data>
+<data name="VideoCacheSummaryFormat" xml:space="preserve"><value>Caché persistente: {0} elementos ({1})</value></data>
+<data name="VideoCacheListHeader" xml:space="preserve"><value>Lista de caché persistente</value></data>
+<data name="VideoCacheListEmpty" xml:space="preserve"><value>No hay caché persistente.</value></data>
+<data name="ButtonClearVideoCache" xml:space="preserve"><value>Borrar caché persistente</value></data>
+<data name="StoragePersistent" xml:space="preserve"><value>Persistente</value></data>
+</root>
