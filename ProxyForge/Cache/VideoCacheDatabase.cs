@@ -13,7 +13,8 @@ internal sealed class VideoCacheDatabase : IVideoCacheDatabase
     private const int FormatVersion = 1;
     private const int HeaderSize = 32;
     private const int HeaderCrcOffset = 16;
-    private const string DbFileName = "zerodiskproxy.vdb";
+    private const string OldDbFileName = "zerodiskproxy.vdb";
+    private const string DbFileName = "proxyforge.vdb";
     private const string BackupSuffix = ".bak";
     private const string TempSuffix = ".tmp";
 
@@ -33,6 +34,49 @@ internal sealed class VideoCacheDatabase : IVideoCacheDatabase
         Directory.CreateDirectory(_cacheDirectory);
         _dbPath = Path.Combine(_cacheDirectory, DbFileName);
         _backupPath = _dbPath + BackupSuffix;
+
+        var oldDbPath = Path.Combine(_cacheDirectory, OldDbFileName);
+        if (File.Exists(oldDbPath) && !File.Exists(_dbPath))
+        {
+            Debug.WriteLine("[VideoCacheDatabase] Starting robust data migration to ProxyForge format.");
+            try
+            {
+                var migrationTempPath = _dbPath + ".migration.tmp";
+                File.Copy(oldDbPath, migrationTempPath, true);
+
+                var oldBackupPath = oldDbPath + BackupSuffix;
+                var migrationBackupTempPath = _backupPath + ".migration.tmp";
+                var hasBackup = File.Exists(oldBackupPath);
+                if (hasBackup)
+                {
+                    File.Copy(oldBackupPath, migrationBackupTempPath, true);
+                }
+
+                File.Move(migrationTempPath, _dbPath, true);
+                if (hasBackup)
+                {
+                    File.Move(migrationBackupTempPath, _backupPath, true);
+                }
+
+                File.Delete(oldDbPath);
+                if (hasBackup)
+                {
+                    File.Delete(oldBackupPath);
+                }
+                var oldTempPath = oldDbPath + TempSuffix;
+                if (File.Exists(oldTempPath))
+                {
+                    File.Delete(oldTempPath);
+                }
+
+                Debug.WriteLine("[VideoCacheDatabase] Migration completed successfully. Legacy files removed.");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(string.Concat("[VideoCacheDatabase] Migration failed: ", ex.Message));
+            }
+        }
+
         _diskStore = new VideoCacheDiskStore(_cacheDirectory);
 
         Span<byte> hashBuf = stackalloc byte[32];
