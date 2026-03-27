@@ -30,7 +30,7 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
         catch (Exception ex)
         {
             Debug.WriteLine(string.Concat("[ProxyForge] CreateCore failed for ", filePath, ": ", ex.Message));
-            return FallbackLoad(devices, filePath);
+            return null;
         }
     }
 
@@ -45,7 +45,7 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
             return null;
 
         if (host.ExportDetector.IsExporting())
-            return WrapFromOther(devices, filePath);
+            return null;
 
         if (!IsLargeEnough(filePath, settings.MinFileSizeForProxy))
             return null;
@@ -78,7 +78,7 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
             if (!host.CacheManager.ProxyExists(filePath, proxyScale))
                 host.CacheManager.StartProxyGeneration(filePath, proxyScale, settings);
 
-            return WrapFromOther(devices, filePath);
+            return null;
         }
 
         return null;
@@ -145,23 +145,6 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
             }
         }
         return null;
-    }
-
-    private static IVideoFileSource? FallbackLoad(IGraphicsDevicesAndContext devices, string filePath)
-    {
-        try
-        {
-            var lightSource = CreateLightweightSource(devices, filePath);
-            if (lightSource is not null)
-                return lightSource;
-
-            return WrapFromOther(devices, filePath);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine(string.Concat("[ProxyForge] FallbackLoad failed for ", filePath, ": ", ex.Message));
-            return null;
-        }
     }
 
     private static IVideoFileSource? TryLoadProxy(
