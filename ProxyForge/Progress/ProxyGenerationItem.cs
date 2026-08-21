@@ -59,19 +59,6 @@ public sealed class ProxyGenerationItem : Bindable
         set => Set(ref _statusMessage, value);
     }
 
-    private bool _isInMemory = true;
-    public bool IsInMemory
-    {
-        get => _isInMemory;
-        set
-        {
-            if (Set(ref _isInMemory, value))
-                OnPropertyChanged(nameof(StorageText));
-        }
-    }
-
-    public string StorageText => _isInMemory ? Translate.StorageMemory : Translate.StorageDisk;
-
     internal ProxyGenerationItem(string originalPath)
     {
         OriginalPath = originalPath;

@@ -45,20 +45,6 @@ internal sealed class ProxyForgeSettings : SettingsBase<ProxyForgeSettings>
         set => Set(ref _gopSize, Math.Clamp(value, 1, 300));
     }
 
-    private int _memoryReserveMb = 512;
-    public int MemoryReserveMb
-    {
-        get => _memoryReserveMb;
-        set => Set(ref _memoryReserveMb, Math.Clamp(value, 128, 8192));
-    }
-
-    private int _maxCacheMemoryMb = 2048;
-    public int MaxCacheMemoryMb
-    {
-        get => _maxCacheMemoryMb;
-        set => Set(ref _maxCacheMemoryMb, Math.Clamp(value, 256, 16384));
-    }
-
     private bool _autoGenerate = true;
     public bool AutoGenerate
     {
@@ -85,13 +71,6 @@ internal sealed class ProxyForgeSettings : SettingsBase<ProxyForgeSettings>
     {
         get => _enableHardwareAcceleration;
         set => Set(ref _enableHardwareAcceleration, value);
-    }
-
-    private bool _enableDiskFallback = true;
-    public bool EnableDiskFallback
-    {
-        get => _enableDiskFallback;
-        set => Set(ref _enableDiskFallback, value);
     }
 
     private bool _enableVideoCache = true;

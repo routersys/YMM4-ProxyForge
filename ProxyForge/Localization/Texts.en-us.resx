@@ -61,9 +61,9 @@
 <data name="CurrentCulture" xml:space="preserve"><value>en-us</value></data>
 <data name="AppName" xml:space="preserve"><value>ProxyForge</value></data>
 <data name="SettingsName" xml:space="preserve"><value>ProxyForge Settings</value></data>
-<data name="StorageMemory" xml:space="preserve"><value>Memory</value></data>
 <data name="StorageDisk" xml:space="preserve"><value>Disk</value></data>
 <data name="ProxyGenerationStatusGenerating" xml:space="preserve"><value>Generating...</value></data>
+<data name="ProxyGenerationStatusQueued" xml:space="preserve"><value>Queued...</value></data>
 <data name="ProxyGenerationStatusCompleted" xml:space="preserve"><value>Completed</value></data>
 <data name="ProxyGenerationStatusCanceled" xml:space="preserve"><value>Canceled</value></data>
 <data name="ProxyGenerationStatusFailedPrefix" xml:space="preserve"><value>Failed:</value></data>
@@ -72,16 +72,15 @@
 <data name="CacheDeleteSummaryFormat" xml:space="preserve"><value>Deleted {0} items ({1}).</value></data>
 <data name="CacheSummaryPluginNotInitialized" xml:space="preserve"><value>Plugin not initialized</value></data>
 <data name="CacheSummaryCountFormat" xml:space="preserve"><value>Cache count: {0} items</value></data>
-<data name="CacheUsageMemoryAndDiskFormat" xml:space="preserve"><value>Memory: {0} items ({1})   Disk: {2} items ({3})</value></data>
-<data name="CacheUsageAllocatedFormat" xml:space="preserve"><value>Allocated: {0}</value></data>
+<data name="CacheUsageDiskFormat" xml:space="preserve"><value>Disk: {0} items ({1})</value></data>
 <data name="GenerationPopupWindowTitle" xml:space="preserve"><value>ProxyForge - Generating Proxy</value></data>
 <data name="GenerationPopupHeader" xml:space="preserve"><value>Generating proxy video...</value></data>
 <data name="GenerationPopupNoActiveItems" xml:space="preserve"><value>There are no proxies being generated.</value></data>
-<data name="SettingsCardDescription" xml:space="preserve"><value>Speed up editing with memory-based proxy videos</value></data>
+<data name="SettingsCardDescription" xml:space="preserve"><value>Speed up editing with low-resolution proxy videos</value></data>
 <data name="SectionBasicSettingsHeader" xml:space="preserve"><value>Basic Settings</value></data>
 <data name="SectionBasicSettingsDescription" xml:space="preserve"><value>Configure the basic behavior of proxy videos</value></data>
 <data name="SettingUseProxyLabel" xml:space="preserve"><value>Use proxy</value></data>
-<data name="SettingUseProxyTooltip" xml:space="preserve"><value>Use low-resolution proxy video in memory while editing.&amp;#10;Automatically switches to original on export.</value></data>
+<data name="SettingUseProxyTooltip" xml:space="preserve"><value>Use a low-resolution proxy video while editing.&amp;#10;Automatically switches to the original on export.</value></data>
 <data name="SettingResolutionScaleLabel" xml:space="preserve"><value>Resolution Scale</value></data>
 <data name="SettingResolutionScaleTooltip" xml:space="preserve"><value>Resolution scale factor for proxy video</value></data>
 <data name="SettingMinFileSizeLabel" xml:space="preserve"><value>Minimum File Size</value></data>
@@ -89,16 +88,9 @@
 <data name="SectionQualitySettingsHeader" xml:space="preserve"><value>Quality Settings</value></data>
 <data name="SectionQualitySettingsDescription" xml:space="preserve"><value>Adjust the balance between encoding quality and performance</value></data>
 <data name="SettingBitrateFactorLabel" xml:space="preserve"><value>Bitrate Factor</value></data>
-<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>Higher value gives better quality but uses more memory</value></data>
+<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>Higher value gives better quality but a larger file</value></data>
 <data name="SettingGopSizeLabel" xml:space="preserve"><value>GOP Size</value></data>
 <data name="SettingGopSizeTooltip" xml:space="preserve"><value>Keyframe interval</value></data>
-<data name="SectionMemorySettingsHeader" xml:space="preserve"><value>Memory Settings</value></data>
-<data name="SectionMemorySettingsDescription" xml:space="preserve"><value>Control memory usage and disk fallback</value></data>
-<data name="SettingMemoryReserveLabel" xml:space="preserve"><value>Memory Reserve</value></data>
-<data name="SettingMemoryReserveTooltip" xml:space="preserve"><value>Falls back to disk when memory goes below this value</value></data>
-<data name="SettingMaxCacheMemoryLabel" xml:space="preserve"><value>Max Cache Memory</value></data>
-<data name="SettingDiskFallbackLabel" xml:space="preserve"><value>Disk Fallback</value></data>
-<data name="SettingDiskFallbackTooltip" xml:space="preserve"><value>Create temporary files on disk when memory is insufficient</value></data>
 <data name="SectionAutomationSettingsHeader" xml:space="preserve"><value>Automation Settings</value></data>
 <data name="SettingAutoGenerateLabel" xml:space="preserve"><value>Auto Generate</value></data>
 <data name="SettingClearCacheOnExitLabel" xml:space="preserve"><value>Clear Cache on Exit</value></data>

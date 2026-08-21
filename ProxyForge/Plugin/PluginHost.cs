@@ -2,10 +2,8 @@
 using ProxyForge.Core;
 using ProxyForge.Detection;
 using ProxyForge.Interfaces;
-using ProxyForge.Memory;
 using ProxyForge.Services;
 using ProxyForge.Settings;
-using ProxyForge.Streaming;
 using ProxyForge.ViewModels;
 using ProxyForge.Views;
 using System.IO;
@@ -23,26 +21,20 @@ internal sealed class PluginHost : IDisposable
     private GenerationPopupView? _popupView;
 
     internal static PluginHost? Instance => _instance;
-    internal MemoryBudget Budget { get; }
     internal ProxyCacheManager CacheManager { get; }
     internal IExportDetector ExportDetector { get; }
-    internal ChunkAllocator ChunkAllocator { get; }
     internal string FallbackDirectory { get; }
     internal string TmpDirectory { get; }
     internal VideoCacheDatabase? VideoCache { get; }
 
     private PluginHost(
-        MemoryBudget budget,
         IProxyEncoderFactory encoderFactory,
         IExportDetector exportDetector,
-        ChunkAllocator chunkAllocator,
         string fallbackDirectory,
         string tmpDirectory,
         VideoCacheDatabase? videoCache)
     {
-        Budget = budget;
         ExportDetector = exportDetector;
-        ChunkAllocator = chunkAllocator;
         FallbackDirectory = fallbackDirectory;
         TmpDirectory = tmpDirectory;
         VideoCache = videoCache;
@@ -54,21 +46,15 @@ internal sealed class PluginHost : IDisposable
     private static PluginHost CreateDefault()
     {
         var settings = ProxyForgeSettings.Default;
-        var budget = new MemoryBudget(settings.MemoryReserveMb, settings.MaxCacheMemoryMb);
         var pluginDir = Path.GetDirectoryName(typeof(PluginHost).Assembly.Location) ?? AppDirectories.TemporaryDirectory;
         var cacheDir = Path.Combine(pluginDir, "cache");
         var tmpDirectory = Path.Combine(cacheDir, "tmp");
-        var chunkAllocator = new ChunkAllocator(65536);
 
-        MfSession.AddRef();
         WindowThemeRegistry.Register(new WindowThemeService());
 
-        IProxyEncoderFactory encoderFactory = new MfProxyEncoderFactory(
-            budget,
+        IProxyEncoderFactory encoderFactory = new FFmpegProxyEncoderFactory(
             tmpDirectory,
-            static () => new EncoderConfig(
-                ProxyForgeSettings.Default.EnableHardwareAcceleration,
-                ProxyForgeSettings.Default.EnableDiskFallback));
+            static () => new EncoderConfig(ProxyForgeSettings.Default.EnableHardwareAcceleration));
 
         VideoCacheDatabase? videoCache = null;
         if (settings.EnableVideoCache)
@@ -81,7 +67,7 @@ internal sealed class PluginHost : IDisposable
         }
 
         IExportDetector exportDetector = new ExportDetector();
-        return new PluginHost(budget, encoderFactory, exportDetector, chunkAllocator, tmpDirectory, tmpDirectory, videoCache);
+        return new PluginHost(encoderFactory, exportDetector, tmpDirectory, tmpDirectory, videoCache);
     }
 
     internal static PluginHost EnsureInitialized()
@@ -164,10 +150,7 @@ internal sealed class PluginHost : IDisposable
 
         CacheManager.Dispose();
         VideoCache?.Dispose();
-        ChunkAllocator.Dispose();
         CleanupTmpDirectory();
-
-        MfSession.Release();
     }
 
     private void CleanupTmpDirectory()

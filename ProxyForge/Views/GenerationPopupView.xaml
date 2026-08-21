@@ -45,9 +45,6 @@
                                 <Grid>
                                     <TextBlock Text="{Binding FileName}" FontSize="11" TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
-                                    <TextBlock Text="{Binding StorageText}" FontSize="10" HorizontalAlignment="Right"
-                                               Opacity="0.6"
-                                               Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
                                 </Grid>
                                 <Grid Height="18" Margin="0,2,0,0">
                                     <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}"/>

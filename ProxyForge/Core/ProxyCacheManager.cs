@@ -25,6 +25,7 @@ internal sealed class ProxyCacheManager : IDisposable
 
     private readonly ConcurrentDictionary<CacheKey, ProxyCacheEntry> _cache = new();
     private readonly ConcurrentDictionary<CacheKey, CancellationTokenSource> _pendingGenerations = new();
+    private readonly SemaphoreSlim _encodeGate = new(1, 1);
     private readonly IProxyEncoderFactory _encoderFactory;
     private readonly VideoCacheDatabase? _videoCache;
     private readonly string _tmpDirectory;
@@ -123,10 +124,19 @@ internal sealed class ProxyCacheManager : IDisposable
 
         try
         {
-            using var encoder = _encoderFactory.Create();
-            var entry = await encoder.EncodeAsync(
-                originalPath, scale, settings.BitrateFactor / 100f, settings.GopSize,
-                progressItem, cts.Token).ConfigureAwait(false);
+            ProxyCacheEntry entry;
+            await AcquireEncodeSlotAsync(progressItem, cts.Token).ConfigureAwait(false);
+            try
+            {
+                using var encoder = _encoderFactory.Create();
+                entry = await encoder.EncodeAsync(
+                    originalPath, scale, settings.BitrateFactor / 100f, settings.GopSize,
+                    progressItem, cts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                _encodeGate.Release();
+            }
 
             var stored = _cache.GetOrAdd(key, entry);
             if (!ReferenceEquals(stored, entry))
@@ -135,13 +145,11 @@ internal sealed class ProxyCacheManager : IDisposable
             if (_videoCache is not null && ProxyForgeSettings.Default.EnableVideoCache)
                 PersistToVideoCache(originalPath, scale, stored);
 
-            var isInMem = stored.IsInMemory;
             DispatchInvoke(() =>
             {
                 progressItem.Progress = 100;
                 progressItem.IsCompleted = true;
                 progressItem.StatusMessage = Translate.ProxyGenerationStatusCompleted;
-                progressItem.IsInMemory = isInMem;
             });
 
             ProxyCompleted?.Invoke(originalPath, stored);
@@ -174,6 +182,16 @@ internal sealed class ProxyCacheManager : IDisposable
 
         await Task.Delay(delayMs, CancellationToken.None).ConfigureAwait(false);
         DispatchInvoke(() => ActiveGenerations.Remove(progressItem));
+    }
+
+    private async Task AcquireEncodeSlotAsync(ProxyGenerationItem progressItem, CancellationToken cancellationToken)
+    {
+        if (_encodeGate.Wait(0, CancellationToken.None))
+            return;
+
+        DispatchInvoke(() => progressItem.StatusMessage = Translate.ProxyGenerationStatusQueued);
+        await _encodeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        DispatchInvoke(() => progressItem.StatusMessage = Translate.ProxyGenerationStatusGenerating);
     }
 
     private static void DispatchInvoke(Action action)
@@ -253,7 +271,7 @@ internal sealed class ProxyCacheManager : IDisposable
                     resultList.Add(new CacheEntrySnapshot(
                         db.OriginalPath, db.FileName, db.Scale,
                         db.ProxyWidth, db.ProxyHeight,
-                        false, db.FileSize, db.CreatedAt, db.LastAccessedAt));
+                        db.FileSize, db.CreatedAt, db.LastAccessedAt));
                 }
             }
         }
@@ -261,27 +279,19 @@ internal sealed class ProxyCacheManager : IDisposable
         return resultList.Count > 0 ? [.. resultList] : [];
     }
 
-    internal (int entryCount, long memSize, long diskSize, int memCount, int diskCount) GetCacheInfo()
+    internal (int entryCount, long totalSize) GetCacheInfo()
     {
-        long ms = 0, ds = 0;
-        int mc = 0, dc = 0;
+        long totalSize = 0;
+        var count = 0;
         foreach (var e in _cache.Values)
         {
             if (!e.IsValid)
                 continue;
 
-            if (e.IsInMemory)
-            {
-                ms += e.DataSize;
-                mc++;
-            }
-            else
-            {
-                ds += e.DataSize;
-                dc++;
-            }
+            totalSize += e.DataSize;
+            count++;
         }
-        return (_cache.Count, ms, ds, mc, dc);
+        return (count, totalSize);
     }
 
     public void Dispose()

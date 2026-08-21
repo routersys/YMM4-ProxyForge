@@ -61,9 +61,9 @@
 <data name="CurrentCulture" xml:space="preserve"><value>ja-jp</value></data>
 <data name="AppName" xml:space="preserve"><value>ProxyForge</value></data>
 <data name="SettingsName" xml:space="preserve"><value>ProxyForge 設定</value></data>
-<data name="StorageMemory" xml:space="preserve"><value>メモリ</value></data>
 <data name="StorageDisk" xml:space="preserve"><value>ディスク</value></data>
 <data name="ProxyGenerationStatusGenerating" xml:space="preserve"><value>生成中...</value></data>
+<data name="ProxyGenerationStatusQueued" xml:space="preserve"><value>待機中...</value></data>
 <data name="ProxyGenerationStatusCompleted" xml:space="preserve"><value>完了</value></data>
 <data name="ProxyGenerationStatusCanceled" xml:space="preserve"><value>キャンセル</value></data>
 <data name="ProxyGenerationStatusFailedPrefix" xml:space="preserve"><value>失敗:</value></data>
@@ -72,16 +72,15 @@
 <data name="CacheDeleteSummaryFormat" xml:space="preserve"><value>{0} 件 ({1}) を削除しました。</value></data>
 <data name="CacheSummaryPluginNotInitialized" xml:space="preserve"><value>プラグイン未初期化</value></data>
 <data name="CacheSummaryCountFormat" xml:space="preserve"><value>キャッシュ数: {0} 件</value></data>
-<data name="CacheUsageMemoryAndDiskFormat" xml:space="preserve"><value>メモリ: {0} 件 ({1})   ディスク: {2} 件 ({3})</value></data>
-<data name="CacheUsageAllocatedFormat" xml:space="preserve"><value>割当済: {0}</value></data>
+<data name="CacheUsageDiskFormat" xml:space="preserve"><value>ディスク: {0} 件 ({1})</value></data>
 <data name="GenerationPopupWindowTitle" xml:space="preserve"><value>ProxyForge - プロキシ生成中</value></data>
 <data name="GenerationPopupHeader" xml:space="preserve"><value>プロキシ動画を生成しています...</value></data>
 <data name="GenerationPopupNoActiveItems" xml:space="preserve"><value>生成中のプロキシはありません</value></data>
-<data name="SettingsCardDescription" xml:space="preserve"><value>メモリベースのプロキシ動画で編集を高速化</value></data>
+<data name="SettingsCardDescription" xml:space="preserve"><value>低解像度のプロキシ動画で編集を高速化</value></data>
 <data name="SectionBasicSettingsHeader" xml:space="preserve"><value>基本設定</value></data>
 <data name="SectionBasicSettingsDescription" xml:space="preserve"><value>プロキシ動画の基本的な動作を設定します</value></data>
 <data name="SettingUseProxyLabel" xml:space="preserve"><value>プロキシを使用する</value></data>
-<data name="SettingUseProxyTooltip" xml:space="preserve"><value>編集中にメモリ上の低解像度プロキシ動画を使用します。&amp;#10;出力時は自動でオリジナルに切り替わります。</value></data>
+<data name="SettingUseProxyTooltip" xml:space="preserve"><value>編集中に低解像度のプロキシ動画を使用します。&amp;#10;出力時は自動でオリジナルに切り替わります。</value></data>
 <data name="SettingResolutionScaleLabel" xml:space="preserve"><value>解像度スケール</value></data>
 <data name="SettingResolutionScaleTooltip" xml:space="preserve"><value>プロキシ動画の解像度倍率</value></data>
 <data name="SettingMinFileSizeLabel" xml:space="preserve"><value>最小ファイルサイズ</value></data>
@@ -89,16 +88,9 @@
 <data name="SectionQualitySettingsHeader" xml:space="preserve"><value>品質設定</value></data>
 <data name="SectionQualitySettingsDescription" xml:space="preserve"><value>エンコード品質とパフォーマンスのバランスを調整します</value></data>
 <data name="SettingBitrateFactorLabel" xml:space="preserve"><value>ビットレート係数</value></data>
-<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>高いほど高品質ですがメモリ使用量が増えます</value></data>
+<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>高いほど高品質ですがファイルサイズが増えます</value></data>
 <data name="SettingGopSizeLabel" xml:space="preserve"><value>GOPサイズ</value></data>
 <data name="SettingGopSizeTooltip" xml:space="preserve"><value>キーフレーム間隔</value></data>
-<data name="SectionMemorySettingsHeader" xml:space="preserve"><value>メモリ設定</value></data>
-<data name="SectionMemorySettingsDescription" xml:space="preserve"><value>メモリ使用量とディスクフォールバックを制御します</value></data>
-<data name="SettingMemoryReserveLabel" xml:space="preserve"><value>メモリ予約量</value></data>
-<data name="SettingMemoryReserveTooltip" xml:space="preserve"><value>これを下回るとディスクにフォールバックします</value></data>
-<data name="SettingMaxCacheMemoryLabel" xml:space="preserve"><value>最大キャッシュメモリ</value></data>
-<data name="SettingDiskFallbackLabel" xml:space="preserve"><value>ディスクフォールバック</value></data>
-<data name="SettingDiskFallbackTooltip" xml:space="preserve"><value>メモリ不足時にディスクに一時ファイルを作成します</value></data>
 <data name="SectionAutomationSettingsHeader" xml:space="preserve"><value>自動化設定</value></data>
 <data name="SettingAutoGenerateLabel" xml:space="preserve"><value>自動生成</value></data>
 <data name="SettingClearCacheOnExitLabel" xml:space="preserve"><value>終了時にキャッシュクリア</value></data>

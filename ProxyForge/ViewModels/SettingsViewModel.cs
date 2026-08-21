@@ -2,7 +2,6 @@
 using ProxyForge.Core;
 using ProxyForge.Interfaces;
 using ProxyForge.Localization;
-using ProxyForge.Memory;
 using ProxyForge.Utilities;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
@@ -13,7 +12,6 @@ namespace ProxyForge.ViewModels;
 internal sealed class SettingsViewModel : Bindable
 {
     private readonly ProxyCacheManager? _cacheManager;
-    private readonly MemoryBudget? _budget;
     private readonly VideoCacheDatabase? _videoCache;
     private readonly IDialogService _dialogService;
 
@@ -24,11 +22,11 @@ internal sealed class SettingsViewModel : Bindable
         set => Set(ref _cacheSummaryText, value);
     }
 
-    private string _memoryUsageText = "";
-    public string MemoryUsageText
+    private string _cacheUsageText = "";
+    public string CacheUsageText
     {
-        get => _memoryUsageText;
-        set => Set(ref _memoryUsageText, value);
+        get => _cacheUsageText;
+        set => Set(ref _cacheUsageText, value);
     }
 
     private bool _hasCacheEntries;
@@ -62,10 +60,9 @@ internal sealed class SettingsViewModel : Bindable
     public ICommand ClearVideoCacheCommand { get; }
     public ICommand RemoveVideoCacheEntryCommand { get; }
 
-    internal SettingsViewModel(ProxyCacheManager? cacheManager, MemoryBudget? budget, VideoCacheDatabase? videoCache, IDialogService dialogService)
+    internal SettingsViewModel(ProxyCacheManager? cacheManager, VideoCacheDatabase? videoCache, IDialogService dialogService)
     {
         _cacheManager = cacheManager;
-        _budget = budget;
         _videoCache = videoCache;
         _dialogService = dialogService;
         ClearCacheCommand = new ActionCommand(ExecuteClearCache);
@@ -101,27 +98,17 @@ internal sealed class SettingsViewModel : Bindable
         if (_cacheManager is null)
         {
             CacheSummaryText = Translate.CacheSummaryPluginNotInitialized;
-            MemoryUsageText = "";
+            CacheUsageText = "";
             HasCacheEntries = false;
             return;
         }
 
-        var (count, memSize, diskSize, memCount, diskCount) = _cacheManager.GetCacheInfo();
+        var (count, totalSize) = _cacheManager.GetCacheInfo();
         CacheSummaryText = string.Format(Translate.CacheSummaryCountFormat, count.ToString("N0"));
-
-        var usageText = string.Format(
-            Translate.CacheUsageMemoryAndDiskFormat,
-            memCount.ToString("N0"),
-            ByteFormatter.Format(memSize),
-            diskCount.ToString("N0"),
-            ByteFormatter.Format(diskSize));
-
-        if (_budget is not null)
-            usageText = string.Concat(
-                usageText,
-                string.Format(Translate.CacheUsageAllocatedFormat, ByteFormatter.Format(_budget.AllocatedBytes)));
-
-        MemoryUsageText = usageText;
+        CacheUsageText = string.Format(
+            Translate.CacheUsageDiskFormat,
+            count.ToString("N0"),
+            ByteFormatter.Format(totalSize));
 
         CacheEntries.Clear();
         var snapshots = _cacheManager.GetAllSnapshots();
@@ -201,8 +188,7 @@ internal sealed class CacheEntryViewModel(CacheEntrySnapshot snapshot) : Bindabl
     public string OriginalPath { get; } = snapshot.OriginalPath;
     public float Scale { get; } = snapshot.Scale;
     public string Resolution { get; } = string.Create(null, stackalloc char[24], $"{snapshot.ProxyWidth}\u00d7{snapshot.ProxyHeight}");
-    public bool IsInMemory { get; } = snapshot.IsInMemory;
-    public string StorageType { get; } = snapshot.IsInMemory ? Translate.StorageMemory : Translate.StorageDisk;
+    public string StorageType { get; } = Translate.StorageDisk;
     public long DataSize { get; } = snapshot.DataSize;
     public string DataSizeText { get; } = ByteFormatter.Format(snapshot.DataSize);
     public string CreatedAtText { get; } = snapshot.CreatedAt.ToLocalTime().ToString("HH:mm:ss");

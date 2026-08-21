@@ -81,6 +81,10 @@
 			<HintPath>$(YMM4DirPath)YukkuriMovieMaker.Plugin.dll</HintPath>
 			<Private>false</Private>
 		</Reference>
+		<Reference Include="YukkuriMovieMaker.Plugin.FileSource.FFmpeg">
+			<HintPath>$(YMM4DirPath)YukkuriMovieMaker.Plugin.FileSource.FFmpeg.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
 		<Reference Include="SharpGen.Runtime.COM">
 			<HintPath>$(YMM4DirPath)SharpGen.Runtime.COM.dll</HintPath>
 			<Private>false</Private>
@@ -102,6 +106,10 @@
 
 	<ItemGroup>
 	  <PackageReference Include="System.IO.Hashing" Version="10.0.5" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <InternalsVisibleTo Include="ProxyForge.Tests" />
 	</ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">

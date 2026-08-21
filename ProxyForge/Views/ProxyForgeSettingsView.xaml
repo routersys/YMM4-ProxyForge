@@ -179,41 +179,6 @@
                 </StackPanel>
             </Expander>
 
-            <Expander Header="{x:Static local:Translate.SectionMemorySettingsHeader}" IsExpanded="True">
-                <StackPanel Margin="4,4,4,0">
-                    <TextBlock Text="{x:Static local:Translate.SectionMemorySettingsDescription}" Style="{StaticResource SectionDesc}"/>
-
-                    <Grid Style="{StaticResource SettingRow}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="{x:Static local:Translate.SettingMemoryReserveLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingMemoryReserveTooltip}"/>
-                        </StackPanel>
-                        <c:TextBoxSlider Value="{Binding Source={x:Static settings:ProxyForgeSettings.Default}, Path=MemoryReserveMb}"
-                                         Min="128" Max="8192" DefaultMin="256" DefaultMax="2048" Delta="128"
-                                         StringFormat="F0" Unit="MB"
-                                         Width="200" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Border Style="{StaticResource Divider}"/>
-
-                    <Grid Style="{StaticResource SettingRow}">
-                        <Label Content="{x:Static local:Translate.SettingMaxCacheMemoryLabel}" Style="{StaticResource SettingLabel}"/>
-                        <c:TextBoxSlider Value="{Binding Source={x:Static settings:ProxyForgeSettings.Default}, Path=MaxCacheMemoryMb}"
-                                         Min="256" Max="16384" DefaultMin="512" DefaultMax="4096" Delta="256"
-                                         StringFormat="F0" Unit="MB"
-                                         Width="200" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <Border Style="{StaticResource Divider}"/>
-
-                    <Grid Style="{StaticResource SettingRow}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Label Content="{x:Static local:Translate.SettingDiskFallbackLabel}" Style="{StaticResource SettingLabel}" ToolTip="{x:Static local:Translate.SettingDiskFallbackTooltip}"/>
-                        </StackPanel>
-                        <c:ToggleSlider Value="{Binding Source={x:Static settings:ProxyForgeSettings.Default}, Path=EnableDiskFallback}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                    </Grid>
-                </StackPanel>
-            </Expander>
-
             <Expander Header="{x:Static local:Translate.SectionAutomationSettingsHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
                     <Grid Style="{StaticResource SettingRow}">
@@ -262,7 +227,7 @@
             <Expander Header="{x:Static local:Translate.SectionCacheManagementHeader}" IsExpanded="True">
                 <StackPanel Margin="4,4,4,0">
                     <TextBlock Text="{Binding CacheSummaryText}" FontSize="12" Margin="0,0,0,4" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding MemoryUsageText}" FontSize="10"
+                    <TextBlock Text="{Binding CacheUsageText}" FontSize="10"
                                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
                     <WrapPanel Margin="0,0,0,8">

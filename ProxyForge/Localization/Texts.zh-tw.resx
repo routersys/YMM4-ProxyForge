@@ -61,9 +61,9 @@
 <data name="CurrentCulture" xml:space="preserve"><value>zh-tw</value></data>
 <data name="AppName" xml:space="preserve"><value>ProxyForge</value></data>
 <data name="SettingsName" xml:space="preserve"><value>ProxyForge 設定</value></data>
-<data name="StorageMemory" xml:space="preserve"><value>記憶體</value></data>
 <data name="StorageDisk" xml:space="preserve"><value>磁碟</value></data>
 <data name="ProxyGenerationStatusGenerating" xml:space="preserve"><value>正在產生...</value></data>
+<data name="ProxyGenerationStatusQueued" xml:space="preserve"><value>佇列中...</value></data>
 <data name="ProxyGenerationStatusCompleted" xml:space="preserve"><value>完成</value></data>
 <data name="ProxyGenerationStatusCanceled" xml:space="preserve"><value>已取消</value></data>
 <data name="ProxyGenerationStatusFailedPrefix" xml:space="preserve"><value>失敗:</value></data>
@@ -72,16 +72,15 @@
 <data name="CacheDeleteSummaryFormat" xml:space="preserve"><value>已刪除 {0} 項（{1}）。</value></data>
 <data name="CacheSummaryPluginNotInitialized" xml:space="preserve"><value>外掛未初始化</value></data>
 <data name="CacheSummaryCountFormat" xml:space="preserve"><value>快取數: {0} 項</value></data>
-<data name="CacheUsageMemoryAndDiskFormat" xml:space="preserve"><value>記憶體: {0} 項（{1}）   磁碟: {2} 項（{3}）</value></data>
-<data name="CacheUsageAllocatedFormat" xml:space="preserve"><value>已配置: {0}</value></data>
+<data name="CacheUsageDiskFormat" xml:space="preserve"><value>磁碟: {0} 項（{1}）</value></data>
 <data name="GenerationPopupWindowTitle" xml:space="preserve"><value>ProxyForge - 正在產生代理</value></data>
 <data name="GenerationPopupHeader" xml:space="preserve"><value>正在產生代理影片...</value></data>
 <data name="GenerationPopupNoActiveItems" xml:space="preserve"><value>目前沒有正在產生的代理。</value></data>
-<data name="SettingsCardDescription" xml:space="preserve"><value>透過記憶體式代理影片加速編輯</value></data>
+<data name="SettingsCardDescription" xml:space="preserve"><value>透過低解析度代理影片加速編輯</value></data>
 <data name="SectionBasicSettingsHeader" xml:space="preserve"><value>基本設定</value></data>
 <data name="SectionBasicSettingsDescription" xml:space="preserve"><value>設定代理影片的基本行為</value></data>
 <data name="SettingUseProxyLabel" xml:space="preserve"><value>使用代理</value></data>
-<data name="SettingUseProxyTooltip" xml:space="preserve"><value>編輯時使用記憶體中的低解析度代理影片。&amp;#10;輸出時會自動切換為原始影片。</value></data>
+<data name="SettingUseProxyTooltip" xml:space="preserve"><value>編輯時使用低解析度代理影片。&amp;#10;輸出時會自動切換為原始影片。</value></data>
 <data name="SettingResolutionScaleLabel" xml:space="preserve"><value>解析度縮放</value></data>
 <data name="SettingResolutionScaleTooltip" xml:space="preserve"><value>代理影片的解析度倍率</value></data>
 <data name="SettingMinFileSizeLabel" xml:space="preserve"><value>最小檔案大小</value></data>
@@ -89,16 +88,9 @@
 <data name="SectionQualitySettingsHeader" xml:space="preserve"><value>品質設定</value></data>
 <data name="SectionQualitySettingsDescription" xml:space="preserve"><value>調整編碼品質與效能之間的平衡</value></data>
 <data name="SettingBitrateFactorLabel" xml:space="preserve"><value>位元率係數</value></data>
-<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>值越高畫質越好但記憶體用量越大</value></data>
+<data name="SettingBitrateFactorTooltip" xml:space="preserve"><value>值越高畫質越好但檔案越大</value></data>
 <data name="SettingGopSizeLabel" xml:space="preserve"><value>GOP 大小</value></data>
 <data name="SettingGopSizeTooltip" xml:space="preserve"><value>關鍵影格間隔</value></data>
-<data name="SectionMemorySettingsHeader" xml:space="preserve"><value>記憶體設定</value></data>
-<data name="SectionMemorySettingsDescription" xml:space="preserve"><value>控制記憶體使用量與磁碟回退</value></data>
-<data name="SettingMemoryReserveLabel" xml:space="preserve"><value>記憶體保留量</value></data>
-<data name="SettingMemoryReserveTooltip" xml:space="preserve"><value>記憶體低於此值時回退到磁碟</value></data>
-<data name="SettingMaxCacheMemoryLabel" xml:space="preserve"><value>最大快取記憶體</value></data>
-<data name="SettingDiskFallbackLabel" xml:space="preserve"><value>磁碟回退</value></data>
-<data name="SettingDiskFallbackTooltip" xml:space="preserve"><value>記憶體不足時在磁碟建立暫存檔</value></data>
 <data name="SectionAutomationSettingsHeader" xml:space="preserve"><value>自動化設定</value></data>
 <data name="SettingAutoGenerateLabel" xml:space="preserve"><value>自動產生</value></data>
 <data name="SettingClearCacheOnExitLabel" xml:space="preserve"><value>結束時清除快取</value></data>

@@ -1,6 +1,5 @@
 ﻿using ProxyForge.Core;
 using ProxyForge.Settings;
-using ProxyForge.Streaming;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -56,10 +55,9 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
         {
             var cached = host.CacheManager.TryGetProxy(filePath, proxyScale);
             if (cached is { IsValid: true })
-                return LoadFromCache(devices, cached, host.FallbackDirectory);
+                return LoadFromCache(devices, cached);
 
-            var initialSource = CreateLightweightSource(devices, filePath)
-                                ?? WrapFromOther(devices, filePath);
+            var initialSource = LoadRaw(devices, filePath);
             if (initialSource is null)
                 return null;
 
@@ -84,28 +82,12 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
         return null;
     }
 
-    private static IVideoFileSource? CreateLightweightSource(
-        IGraphicsDevicesAndContext devices, string filePath)
-    {
-        try
-        {
-            return LightweightVideoFileSource.TryCreate(filePath, devices);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine(string.Concat("[ProxyForge] LightweightSource failed for ", filePath, ": ", ex.Message));
-            return null;
-        }
-    }
-
     private static IVideoFileSource? LoadFromCache(
-        IGraphicsDevicesAndContext devices, ProxyCacheEntry entry, string fallbackDir)
+        IGraphicsDevicesAndContext devices, ProxyCacheEntry entry)
     {
         try
         {
-            var tempPath = entry.GetOrCreateTempFilePath(fallbackDir);
-
-            var source = LoadRaw(devices, tempPath);
+            var source = LoadRaw(devices, entry.GetFilePath());
             if (source is null)
                 return null;
 
@@ -120,32 +102,8 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
         }
     }
 
-    private static IVideoFileSource? WrapFromOther(IGraphicsDevicesAndContext devices, string filePath)
-    {
-        var source = LoadRaw(devices, filePath);
-        return source is not null ? new ProxyForgeVideoSource(source, devices) : null;
-    }
-
-    private static IVideoFileSource? LoadRaw(IGraphicsDevicesAndContext devices, string filePath)
-    {
-        foreach (var plugin in PluginLoader.VideoFileSourcePlugins)
-        {
-            if (plugin is ProxyForgePlugin)
-                continue;
-
-            try
-            {
-                var s = plugin.CreateVideoFileSource(devices, filePath);
-                if (s is not null)
-                    return s;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(string.Concat("[ProxyForge] Plugin ", plugin.Name, " failed for ", filePath, ": ", ex.Message));
-            }
-        }
-        return null;
-    }
+    private static IVideoFileSource? LoadRaw(IGraphicsDevicesAndContext devices, string filePath) =>
+        Ymm4VideoSourceLoader.Load(devices, filePath);
 
     private static IVideoFileSource? TryLoadProxy(
         IGraphicsDevicesAndContext devices, string filePath, float proxyScale, PluginHost host)
@@ -154,7 +112,7 @@ internal sealed class ProxyForgePlugin : IVideoFileSourcePlugin
         if (cached is null || !cached.IsValid)
             return null;
 
-        var source = LoadFromCache(devices, cached, host.FallbackDirectory);
+        var source = LoadFromCache(devices, cached);
         if (source is null)
             host.CacheManager.RemoveProxy(filePath, proxyScale);
 
