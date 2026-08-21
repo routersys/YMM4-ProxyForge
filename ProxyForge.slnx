@@ -7,4 +7,7 @@
   <Project Path="ProxyForge/ProxyForge.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
+  <Project Path="ProxyForge.Tests/ProxyForge.Tests.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
 </Solution>
