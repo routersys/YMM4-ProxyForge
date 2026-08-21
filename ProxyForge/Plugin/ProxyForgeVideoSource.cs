@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Vortice.Direct2D1;
 using Vortice.Direct2D1.Effects;
 using YukkuriMovieMaker.Commons;
@@ -14,7 +13,6 @@ internal sealed class ProxyForgeVideoSource : IVideoFileSource
     private Func<IVideoFileSource?>? _tryUpgradeSource;
     private readonly AffineTransform2D _switchEffect;
     private readonly ID2D1Image _output;
-    private List<IVideoFileSource>? _retiredSources;
     private readonly object _gate = new();
     private volatile bool _upgraded;
     private volatile IVideoFileSource? _pendingUpgrade;
@@ -86,9 +84,7 @@ internal sealed class ProxyForgeVideoSource : IVideoFileSource
                     _switchEffect.SetInput(0, pending.Output, true);
                     _upgraded = true;
                     _tryUpgradeSource = null;
-                    _retiredSources = null;
                     old.Dispose();
-                    ThreadPool.QueueUserWorkItem(static _ => ForceMemoryReclaim());
                 }
                 else
                 {
@@ -140,13 +136,6 @@ internal sealed class ProxyForgeVideoSource : IVideoFileSource
             _switchEffect.SetInput(0, null, true);
             _switchEffect.Dispose();
             _inner.Dispose();
-
-            if (_retiredSources is { } retired)
-            {
-                foreach (var source in retired)
-                    source.Dispose();
-                retired.Clear();
-            }
         }
 
         var orphan = _pendingUpgrade;
@@ -158,29 +147,4 @@ internal sealed class ProxyForgeVideoSource : IVideoFileSource
 
         GC.SuppressFinalize(this);
     }
-    private static void ForceMemoryReclaim()
-    {
-        try
-        {
-            GC.Collect(2, GCCollectionMode.Aggressive, true, true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(2, GCCollectionMode.Forced, true, true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(1, GCCollectionMode.Forced, true);
-
-            try
-            {
-                EmptyWorkingSet(GetCurrentProcess());
-            }
-            catch { }
-        }
-        catch { }
-    }
-
-    [DllImport("kernel32")]
-    private static extern nint GetCurrentProcess();
-
-    [DllImport("psapi")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EmptyWorkingSet(nint hProcess);
 }
