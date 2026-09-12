@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="ProxyForge/ProxyForge.csproj" />
+  <Project Path="YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator.csproj" />
 </Solution>
