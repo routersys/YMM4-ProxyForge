@@ -1,0 +1,94 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<UseWPF>true</UseWPF>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Version>1.0.0</Version>
+		<Platforms>AnyCPU;x64;x64</Platforms>
+		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="ILRepack" Version="2.0.46" PrivateAssets="all" ExcludeAssets="all" GeneratePathProperty="true" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+			<_Parameter1>ProxyForge.Tests</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="NCalc.Core">
+			<HintPath>$(YMM4DirPath)NCalc.Core.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>$(YMM4DirPath)Newtonsoft.Json.dll</HintPath>
+		</Reference>
+		<Reference Include="SharpGen.Runtime">
+			<HintPath>$(YMM4DirPath)SharpGen.Runtime.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="SharpGen.Runtime.COM">
+			<HintPath>$(YMM4DirPath)SharpGen.Runtime.COM.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Vortice.Direct2D1">
+			<HintPath>$(YMM4DirPath)Vortice.Direct2D1.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Vortice.Direct3D11">
+			<HintPath>$(YMM4DirPath)Vortice.Direct3D11.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Vortice.DirectX">
+			<HintPath>$(YMM4DirPath)Vortice.DirectX.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Vortice.D3DCompiler.dll">
+			<HintPath>$(YMM4DirPath)Vortice.D3DCompiler.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Vortice.DXGI.dll">
+			<HintPath>$(YMM4DirPath)Vortice.DXGI.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Vortice.Mathematics">
+			<HintPath>$(YMM4DirPath)Vortice.Mathematics.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="YukkuriMovieMaker.Controls">
+			<HintPath>$(YMM4DirPath)YukkuriMovieMaker.Controls.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="YukkuriMovieMaker.Plugin">
+			<HintPath>$(YMM4DirPath)YukkuriMovieMaker.Plugin.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Include="..\YMM4-GitHubUpdateNotifier\GitHubUpdateNotifier\*.cs" LinkBase="GitHubUpdateNotifier" />
+	</ItemGroup>
+
+	<Import Project="..\YMM4-Telemetry\Telemetry.props" />
+
+	<ItemGroup>
+		<ProjectReference Include="..\YukkuriMovieMaker.Generator\YukkuriMovieMaker.Generator\YukkuriMovieMaker.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+		<AdditionalFiles Include="**/*.csv" />
+	</ItemGroup>
+
+	<Target Name="MergePluginAssembly" AfterTargets="PostBuildEvent" Inputs="$(TargetPath);$(TargetDir)NAudio.dll;$(TargetDir)NAudio.Core.dll;$(TargetDir)NAudio.Asio.dll;$(TargetDir)NAudio.Midi.dll;$(TargetDir)NAudio.Wasapi.dll;$(TargetDir)NAudio.WinMM.dll" Outputs="$(TargetDir)plugin\$(TargetFileName)">
+		<MakeDir Directories="$(TargetDir)plugin" />
+		<Exec Command="&quot;$(PkgILRepack)\tools\ILRepack.exe&quot; /out:&quot;$(TargetDir)plugin\$(TargetFileName)&quot; /lib:&quot;$([System.IO.Path]::GetDirectoryName('$(TargetPath)'))&quot; /lib:&quot;$([System.IO.Path]::GetDirectoryName('$(YMM4DirPath)'))&quot; /internalize &quot;$(TargetPath)&quot; &quot;$(TargetDir)NAudio.dll&quot; &quot;$(TargetDir)NAudio.Core.dll&quot; &quot;$(TargetDir)NAudio.Asio.dll&quot; &quot;$(TargetDir)NAudio.Midi.dll&quot; &quot;$(TargetDir)NAudio.Wasapi.dll&quot; &quot;$(TargetDir)NAudio.WinMM.dll&quot;" />
+	</Target>
+
+	<Target Name="PostBuild" AfterTargets="MergePluginAssembly" Condition="'$(SkipPluginDeploy)' != 'true'">
+		<Exec Command="mkdir &quot;$(YMM4DirPath)user\plugin\$(ProjectName)&quot; &gt; NUL 2&gt;&amp;1&#xD;&#xA;copy &quot;$(TargetDir)plugin\$(TargetFileName)&quot; &quot;$(YMM4DirPath)user\plugin\$(ProjectName)\&quot;&#xD;&#xA;copy &quot;$(TargetDir)WorldNet.dll&quot; &quot;$(YMM4DirPath)user\plugin\$(ProjectName)\&quot;" />
+	</Target>
+
+</Project>
