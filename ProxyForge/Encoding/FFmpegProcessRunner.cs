@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using YukkuriMovieMaker.Commons;
 
@@ -135,13 +136,10 @@ internal static class FFmpegProcessRunner
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (inputFailure is not null)
-        {
-            if (inputFailure is OperationCanceledException canceled)
-                throw canceled;
-
+        if (inputFailure is IOException)
             throw new InvalidOperationException(string.Concat("Failed to send frames to FFmpeg. ", diagnostics.ToString()), inputFailure);
-        }
+        if (inputFailure is not null)
+            ExceptionDispatchInfo.Throw(inputFailure);
 
         return new FFmpegProcessResult(process.ExitCode, diagnostics.ToString());
     }
