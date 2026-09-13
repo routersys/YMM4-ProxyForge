@@ -64,6 +64,13 @@ jobs:
             $problems += "$csprojPath の <Version> が $current です。$version にしてください。"
           }
 
+          $readmePath = ".github/Plugin_Readme.txt"
+          $readme = Get-Content $readmePath -Raw
+          if (-not $readme.Contains(" ProxyForge for YMM4 $tag")) {
+            $current = if ($readme -match '(?m)^ ProxyForge for YMM4 (\S+)') { $Matches[1] } else { "記載なし" }
+            $problems += "$readmePath の見出しが $current です。$tag にしてください。"
+          }
+
           if ($problems.Count -eq 0) {
             Write-Host "バージョン記載は $tag と一致しています"
             exit 0
@@ -111,6 +118,12 @@ jobs:
           }
 
           Copy-Item ".github/Plugin_Readme.txt" "$stageRoot/Readme.txt"
+
+          $readme = Get-Content "$stageRoot/Readme.txt" -Raw
+          if (-not $readme.Contains(" ProxyForge for YMM4 $version")) {
+            Write-Error "同梱する Readme.txt の見出しが $version と一致しません"
+            exit 1
+          }
 
           Compress-Archive -Path "stage/*" -DestinationPath $pkgName -CompressionLevel Optimal
           echo "PKG_NAME=$pkgName" >> $env:GITHUB_OUTPUT
