@@ -131,6 +131,8 @@ public sealed class ProxyFrameRendererTests
     [InlineData(50, 640, 360, 1)]
     [InlineData(25, 1920, 1080, 2)]
     [InlineData(10, 1920, 1080, 3)]
+    [InlineData(50, 100, 31, 0)]
+    [InlineData(50, 31, 100, 0)]
     public void HalvesUntilTheRemainingScaleIsAtLeastAHalf(int scale, int width, int height, int expectedHalvings)
     {
         using var devices = new GraphicsDevices();

@@ -367,6 +367,7 @@ public sealed class ProxyEncoderTests
 
         Assert.False(result.IsSuccess);
         Assert.NotEqual(string.Empty, result.FirstDiagnosticLine(200));
+        Assert.DoesNotContain('\r', result.Diagnostics);
     }
 
     [Fact]

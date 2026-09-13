@@ -255,6 +255,18 @@ public sealed class ProxyCacheTests : IDisposable
     }
 
     [Fact]
+    public void ACacheExactlyAtTheLimitIsNotTrimmed()
+    {
+        var cache = CreateCache();
+        cache.Add(Describe(CreateSource("a.mp4")), WriteProxy(cache, 100));
+        cache.Add(Describe(CreateSource("b.mp4")), WriteProxy(cache, 100));
+        cache.LimitBytes = 200;
+
+        Assert.Equal(0, cache.Trim());
+        Assert.Equal(2, cache.Count);
+    }
+
+    [Fact]
     public void TrimSkipsAFileThatCannotBeDeleted()
     {
         var cache = CreateCache();
