@@ -19,6 +19,7 @@
 	<ItemGroup>
 		<Reference Include="Newtonsoft.Json">
 			<HintPath>$(YMM4DirPath)Newtonsoft.Json.dll</HintPath>
+			<Private>false</Private>
 		</Reference>
 		<Reference Include="SharpGen.Runtime">
 			<HintPath>$(YMM4DirPath)SharpGen.Runtime.dll</HintPath>
