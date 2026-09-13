@@ -3,6 +3,7 @@ using ProxyForge.Cache;
 using ProxyForge.Encoding;
 using ProxyForge.Export;
 using ProxyForge.Sources;
+using ProxyForge.Views;
 
 namespace ProxyForge;
 
@@ -34,9 +35,14 @@ internal static class ProxyForgeHost
         application.Dispatcher.InvokeAsync(() =>
         {
             ExportWindowWatcher.Attach(ExportDetector.Shared);
+            GenerationProgressWindowHost.Attach(ProxyGenerationQueue.Shared, ProxyForgeSettings.Default);
             application.Exit += OnExit;
         });
     }
 
-    static void OnExit(object sender, ExitEventArgs e) => ProxyGenerationQueue.Shared.CancelAll();
+    static void OnExit(object sender, ExitEventArgs e)
+    {
+        ProxyGenerationQueue.Shared.CancelAll();
+        GenerationProgressWindowHost.Shutdown();
+    }
 }
