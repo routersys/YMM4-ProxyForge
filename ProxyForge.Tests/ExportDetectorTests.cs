@@ -7,15 +7,15 @@ public sealed class ExportDetectorTests
     const string Configuration = "動画出力";
     const string Progress = "出力";
 
-    static ExportDetector Create(bool commandLineEncode, Func<Func<bool>, bool?>? resolve = null, List<int>? resolveCalls = null)
+    static ExportDetector Create(bool commandLineEncode, Func<ExportPhase?>? resolve = null, List<int>? resolveCalls = null)
         => new(
             commandLineEncode,
             () => Configuration,
             () => Progress,
-            probe =>
+            () =>
             {
                 resolveCalls?.Add(1);
-                return resolve is null ? probe() : resolve(probe);
+                return resolve is null ? ExportPhase.Idle : resolve();
             });
 
     [Theory]
@@ -112,22 +112,38 @@ public sealed class ExportDetectorTests
     }
 
     [Fact]
-    public void DuringThePreparationTheUiThreadDecidesThatExportingHasStarted()
+    public void DuringThePreparationTheWatchingThreadDecidesThatExportingHasStarted()
     {
+        var calls = new List<int>();
         ExportDetector? detector = null;
-        detector = Create(false, probe =>
+        detector = Create(false, () =>
         {
             detector!.OnWindowOpened(ExportWindowRole.Progress);
-            return probe();
-        });
+            return ExportPhase.Exporting;
+        }, calls);
         detector.OnWindowOpened(ExportWindowRole.Configuration);
 
         Assert.True(detector.IsExporting());
         Assert.Equal(ExportPhase.Exporting, detector.Phase);
+        Assert.True(detector.IsExporting());
+        Assert.Single(calls);
     }
 
     [Fact]
-    public void DuringThePreparationTheUiThreadDecidesThatItWasCancelled()
+    public void AVisibleProgressWindowIsAnExportEvenBeforeItsEventArrives()
+    {
+        var calls = new List<int>();
+        var detector = Create(false, () => ExportPhase.Exporting, calls);
+        detector.OnWindowOpened(ExportWindowRole.Configuration);
+
+        Assert.True(detector.IsExporting());
+        Assert.Equal(ExportPhase.Preparing, detector.Phase);
+        Assert.True(detector.IsExporting());
+        Assert.Equal(2, calls.Count);
+    }
+
+    [Fact]
+    public void DuringThePreparationTheWatchingThreadDecidesThatItWasCancelled()
     {
         var calls = new List<int>();
         var detector = Create(false, resolveCalls: calls);
@@ -141,9 +157,22 @@ public sealed class ExportDetectorTests
     }
 
     [Fact]
+    public void AModalDialogKeepsThePreparationWithoutExporting()
+    {
+        var calls = new List<int>();
+        var detector = Create(false, () => ExportPhase.Preparing, calls);
+        detector.OnWindowOpened(ExportWindowRole.Configuration);
+
+        Assert.False(detector.IsExporting());
+        Assert.Equal(ExportPhase.Preparing, detector.Phase);
+        Assert.False(detector.IsExporting());
+        Assert.Equal(2, calls.Count);
+    }
+
+    [Fact]
     public void AnUnresolvedPreparationIsTreatedAsExporting()
     {
-        var detector = Create(false, _ => null);
+        var detector = Create(false, () => null);
         detector.OnWindowOpened(ExportWindowRole.Configuration);
 
         Assert.True(detector.IsExporting());

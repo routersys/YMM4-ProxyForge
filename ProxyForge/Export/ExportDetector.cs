@@ -20,7 +20,7 @@ internal sealed class ExportDetector(
     bool commandLineEncode,
     Func<string> configurationTitle,
     Func<string> progressTitle,
-    Func<Func<bool>, bool?> resolveOnUiThread)
+    Func<ExportPhase?> resolvePhase)
 {
     public const string EncodeOption = "--encode";
 
@@ -30,7 +30,7 @@ internal sealed class ExportDetector(
         HasEncodeOption(Environment.GetCommandLineArgs()),
         () => HostTexts.VideoExportWindowTitle,
         () => HostTexts.OutputProgressWindowTitle,
-        ExportWindowWatcher.ResolveOnUiThread);
+        ExportWindowWatcher.ResolvePhase);
 
     public bool IsCommandLineEncode => commandLineEncode;
 
@@ -46,13 +46,13 @@ internal sealed class ExportDetector(
         return !string.IsNullOrWhiteSpace(input) && !input.StartsWith("--", StringComparison.Ordinal);
     }
 
-    public ExportWindowRole Classify(string? title)
+    public ExportWindowRole Classify(ReadOnlySpan<char> title)
     {
-        if (string.IsNullOrEmpty(title))
+        if (title.IsEmpty)
             return ExportWindowRole.None;
-        if (string.Equals(title, progressTitle(), StringComparison.Ordinal))
+        if (title.SequenceEqual(progressTitle()))
             return ExportWindowRole.Progress;
-        if (string.Equals(title, configurationTitle(), StringComparison.Ordinal))
+        if (title.SequenceEqual(configurationTitle()))
             return ExportWindowRole.Configuration;
         return ExportWindowRole.None;
     }
@@ -89,11 +89,15 @@ internal sealed class ExportDetector(
                 return true;
         }
 
-        var resolved = resolveOnUiThread(() => Phase == ExportPhase.Exporting);
-        if (resolved != false)
-            return true;
-
-        Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);
-        return false;
+        switch (resolvePhase())
+        {
+            case ExportPhase.Idle:
+                Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);
+                return false;
+            case ExportPhase.Preparing:
+                return false;
+            default:
+                return true;
+        }
     }
 }

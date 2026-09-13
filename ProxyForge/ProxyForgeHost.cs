@@ -34,7 +34,7 @@ internal static class ProxyForgeHost
 
         application.Dispatcher.InvokeAsync(() =>
         {
-            ExportWindowWatcher.Attach(ExportDetector.Shared);
+            ExportWindowWatcher.Attach(ExportDetector.Shared, ProxyForgeTelemetry.Report);
             GenerationProgressWindowHost.Attach(ProxyGenerationQueue.Shared, ProxyForgeSettings.Default);
             application.Exit += OnExit;
         });
@@ -44,5 +44,6 @@ internal static class ProxyForgeHost
     {
         ProxyGenerationQueue.Shared.CancelAll();
         GenerationProgressWindowHost.Shutdown();
+        ExportWindowWatcher.Detach();
     }
 }
