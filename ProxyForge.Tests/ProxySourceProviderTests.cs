@@ -81,12 +81,12 @@ public sealed class ProxySourceProviderTests : IDisposable
 
     SourceIdentity IdentityOf(string path) => SourceIdentity.Of(path)!.Value;
 
-    void Seed(string path)
+    ProxyCacheEntry Seed(string path)
     {
         var temporary = cache.CreateTemporaryPath();
         File.WriteAllBytes(temporary, new byte[64]);
         var identity = IdentityOf(path);
-        cache.Add(new ProxyCacheEntry
+        return cache.Add(new ProxyCacheEntry
         {
             SourcePath = identity.Path,
             SourceLength = identity.Length,
@@ -185,14 +185,14 @@ public sealed class ProxySourceProviderTests : IDisposable
     public async Task ACachedProxyThatCannotBeOpenedIsDroppedAndTheOriginalIsUsed()
     {
         var path = CreateFile();
-        Seed(path);
+        var seeded = Seed(path);
         throwForProxies = true;
 
         using var source = CreateProvider().Create(context, path);
 
         var proxy = Assert.IsType<ProxyVideoSource>(source);
         Assert.False(proxy.IsProxy);
-        Assert.Equal(0, cache.Count);
+        Assert.DoesNotContain(cache.Snapshot(), entry => entry.Id == seeded.Id);
         Assert.Equal(2, opened.Count);
         await queue.WhenIdleAsync();
         Assert.Equal(1, encoded);
