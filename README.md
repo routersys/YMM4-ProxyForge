@@ -11,6 +11,8 @@ YukkuriMovieMaker4（YMM4）上で動作する、編集の間だけ使う解像�
 動画出力のときは元の動画を読み込むため、出力した動画の画質は変わりません。
 生成したファイルは YMM4 のユーザーフォルダーのキャッシュに置き、上限を超えた分は最後に使った日時が古いものから消します。
 
+![Image](https://github.com/routersys/YMM4-ProxyForge/blob/main/docs/ProxyForge.png)
+
 ---
 
 ## 目次
