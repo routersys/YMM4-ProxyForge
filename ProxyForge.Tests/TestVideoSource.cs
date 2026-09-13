@@ -27,6 +27,10 @@ internal sealed class TestVideoSource : IVideoFileSource
 
     public int UpdateCount { get; private set; }
 
+    public bool IsDisposed { get; private set; }
+
+    public TimeSpan LastUpdateTime { get; private set; }
+
     public TimeSpan Duration { get; }
 
     public ID2D1Image Output => output;
@@ -86,12 +90,20 @@ internal sealed class TestVideoSource : IVideoFileSource
         byte red = 64)
         => new(devices, width, height, frameRateNumerator, frameRateDenominator, frameCount, (_, _) => (blue, green, red, byte.MaxValue));
 
-    public void Update(TimeSpan time) => UpdateCount++;
+    public void Update(TimeSpan time)
+    {
+        UpdateCount++;
+        LastUpdateTime = time;
+    }
 
     public int GetFrameIndex(TimeSpan time) => FrameTime.TimeToFrame(time, frameRateNumerator, frameRateDenominator);
 
     public void Dispose()
     {
+        if (IsDisposed)
+            return;
+
+        IsDisposed = true;
         output.Dispose();
         centering.SetInput(0, null, true);
         centering.Dispose();
