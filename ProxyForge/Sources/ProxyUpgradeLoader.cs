@@ -44,7 +44,7 @@ internal sealed class ProxyUpgradeLoader : IDisposable
 
     void OnCompleted(SourceIdentity completedSource, int completedScale, ProxyCacheEntry entry)
     {
-        if (completedScale == scale && completedSource.Matches(source.Path, source.Length, source.WriteTimeTicks))
+        if (completedScale == scale && completedSource == source)
             Begin(entry);
     }
 

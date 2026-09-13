@@ -27,4 +27,8 @@ internal readonly record struct SourceIdentity(string Path, long Length, long Wr
         => Length == length
             && WriteTimeTicks == writeTimeTicks
             && string.Equals(Path, path, StringComparison.OrdinalIgnoreCase);
+
+    public bool Equals(SourceIdentity other) => Matches(other.Path, other.Length, other.WriteTimeTicks);
+
+    public override int GetHashCode() => HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(Path), Length, WriteTimeTicks);
 }

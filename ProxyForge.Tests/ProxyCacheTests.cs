@@ -78,6 +78,19 @@ public sealed class ProxyCacheTests : IDisposable
     }
 
     [Fact]
+    public void IdentitiesAreEqualRegardlessOfThePathCase()
+    {
+        var identity = new SourceIdentity(@"C:\Videos\Source.mp4", 123L, 456L);
+        var upper = identity with { Path = identity.Path.ToUpperInvariant() };
+
+        Assert.Equal(identity, upper);
+        Assert.Equal(identity.GetHashCode(), upper.GetHashCode());
+        Assert.NotEqual(identity, identity with { Length = 124L });
+        Assert.NotEqual(identity, identity with { WriteTimeTicks = 457L });
+        Assert.NotEqual(identity, identity with { Path = @"C:\Videos\Other.mp4" });
+    }
+
+    [Fact]
     public void AnEmptyCacheFindsNothing()
     {
         var cache = CreateCache();

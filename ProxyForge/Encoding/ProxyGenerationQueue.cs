@@ -23,25 +23,14 @@ internal sealed class ProxyGenerationQueue(
 
     readonly record struct Key(SourceIdentity Source, int Scale);
 
-    sealed class KeyComparer : IEqualityComparer<Key>
-    {
-        public static KeyComparer Instance { get; } = new();
-
-        public bool Equals(Key x, Key y)
-            => x.Scale == y.Scale && x.Source.Matches(y.Source.Path, y.Source.Length, y.Source.WriteTimeTicks);
-
-        public int GetHashCode(Key key)
-            => HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(key.Source.Path), key.Source.Length, key.Source.WriteTimeTicks, key.Scale);
-    }
-
     sealed class ItemProgress(ProxyGenerationItem item, Action<Action> onUi) : IProgress<double>
     {
         public void Report(double value) => onUi(() => item.Progress = value);
     }
 
     readonly Lock gate = new();
-    readonly Dictionary<Key, (CancellationTokenSource Cancellation, Task Task)> pending = new(KeyComparer.Instance);
-    readonly HashSet<Key> failures = new(KeyComparer.Instance);
+    readonly Dictionary<Key, (CancellationTokenSource Cancellation, Task Task)> pending = [];
+    readonly HashSet<Key> failures = [];
     readonly SemaphoreSlim slot = new(1, 1);
 
     public static ProxyGenerationQueue Shared { get; } = new(
@@ -212,7 +201,7 @@ internal sealed class ProxyGenerationQueue(
         {
             result = await encode(request, new ItemProgress(item, onUi), token).ConfigureAwait(false);
             var latest = SourceIdentity.Of(key.Source.Path);
-            if (latest is null || !latest.Value.Matches(key.Source.Path, key.Source.Length, key.Source.WriteTimeTicks))
+            if (latest != key.Source)
                 throw new ProxyEncodeException(ProxyEncodeFailure.SourceChanged, "The source file changed while the proxy was being generated.");
         }
         catch
