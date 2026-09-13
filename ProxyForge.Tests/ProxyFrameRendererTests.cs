@@ -3,6 +3,7 @@ using YukkuriMovieMaker.Commons;
 
 namespace ProxyForge.Tests;
 
+[Collection("Direct2D")]
 public sealed class ProxyFrameRendererTests
 {
     static (byte Blue, byte Green, byte Red, byte Alpha) Bgra(int blue, int green, int red, int alpha)

@@ -7,6 +7,7 @@ using ProxyForge.Sources;
 
 namespace ProxyForge.Tests;
 
+[Collection("Direct2D")]
 public sealed class ProxyEncoderTests
 {
     const string SoftwareEncoder = FFmpegArguments.SoftwareVideoEncoder;

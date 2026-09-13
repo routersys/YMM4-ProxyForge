@@ -7,6 +7,7 @@ using YukkuriMovieMaker.Commons;
 
 namespace ProxyForge.Tests;
 
+[Collection("Direct2D")]
 public sealed class ProxySourceProviderTests : IDisposable
 {
     readonly string root = Path.Combine(Path.GetTempPath(), "ProxyForgeTests", Guid.NewGuid().ToString("N"));
@@ -278,7 +279,7 @@ public sealed class ProxySourceProviderTests : IDisposable
         Assert.False(proxy.IsProxy);
         release.SetResult();
         await pending.WhenIdleAsync();
-        for (var attempt = 0; attempt < 200 && !proxy.IsProxy; attempt++)
+        for (var attempt = 0; attempt < 500 && !proxy.IsProxy; attempt++)
         {
             proxy.Update(TimeSpan.Zero);
             await Task.Delay(10, TestContext.Current.CancellationToken);
@@ -306,7 +307,7 @@ public sealed class ProxySourceProviderTests : IDisposable
         using var source = CreateProvider().Create(context, path);
         var proxy = Assert.IsType<ProxyVideoSource>(source);
         await queue.WhenIdleAsync();
-        for (var attempt = 0; attempt < 200 && !proxy.IsProxy; attempt++)
+        for (var attempt = 0; attempt < 500 && !proxy.IsProxy; attempt++)
         {
             proxy.Update(TimeSpan.FromSeconds(1));
             await Task.Delay(10, TestContext.Current.CancellationToken);

@@ -7,6 +7,7 @@ using YukkuriMovieMaker.Commons;
 
 namespace ProxyForge.Tests;
 
+[Collection("Direct2D")]
 public sealed class ProxyUpgradeLoaderTests : IDisposable
 {
     readonly string root = Path.Combine(Path.GetTempPath(), "ProxyForgeTests", Guid.NewGuid().ToString("N"));

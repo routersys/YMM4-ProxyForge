@@ -6,6 +6,7 @@ using YukkuriMovieMaker.Commons;
 
 namespace ProxyForge.Tests;
 
+[Collection("Direct2D")]
 public sealed class ProxyVideoSourceTests : IDisposable
 {
     readonly GraphicsDevices devices = new();
