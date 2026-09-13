@@ -9,6 +9,7 @@ public enum ProxyEncodeFailure
     Transparent,
     FFmpegFailed,
     NoOutput,
+    SourceChanged,
 }
 
 internal sealed class ProxyEncodeException(ProxyEncodeFailure failure, string message) : Exception(message)
