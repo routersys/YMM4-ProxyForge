@@ -1,3 +1,5 @@
+using Newtonsoft.Json;
+
 namespace ProxyForge.Cache;
 
 internal sealed class ProxyCacheEntry
@@ -32,16 +34,51 @@ internal sealed class ProxyCacheEntry
 
     public int FrameCount { get; set; }
 
+    public int ChunkLength { get; set; }
+
+    public List<int> Chunks { get; set; } = [];
+
     public long FileLength { get; set; }
 
     public long CreatedTicks { get; set; }
 
     public long LastUsedTicks { get; set; }
 
-    public bool Matches(SourceIdentity source, int scale)
-        => Scale == scale && source.Matches(SourcePath, SourceLength, SourceWriteTimeTicks);
+    [JsonIgnore]
+    public SourceIdentity Source => new(SourcePath, SourceLength, SourceWriteTimeTicks);
 
-    public ProxyCacheEntry Clone() => (ProxyCacheEntry)MemberwiseClone();
+    [JsonIgnore]
+    public int ChunkCount => ChunkLength <= 0 ? 0 : (FrameCount + ChunkLength - 1) / ChunkLength;
+
+    [JsonIgnore]
+    public bool IsComplete => Chunks.Count >= ChunkCount;
+
+    [JsonIgnore]
+    public bool HasValidLayout => ChunkLength > 0 && FrameCount > 0;
+
+    public bool Matches(SourceIdentity source, int scale) => Scale == scale && Source == source;
+
+    public bool HasChunk(int chunk) => Chunks.Contains(chunk);
+
+    public bool HasSameLayout(ProxyCacheEntry other)
+        => ProxyWidth == other.ProxyWidth
+            && ProxyHeight == other.ProxyHeight
+            && DisplayLeft == other.DisplayLeft
+            && DisplayTop == other.DisplayTop
+            && DisplayWidth == other.DisplayWidth
+            && DisplayHeight == other.DisplayHeight
+            && FrameRateNumerator == other.FrameRateNumerator
+            && FrameRateDenominator == other.FrameRateDenominator
+            && DurationTicks == other.DurationTicks
+            && FrameCount == other.FrameCount
+            && ChunkLength == other.ChunkLength;
+
+    public ProxyCacheEntry Clone()
+    {
+        var clone = (ProxyCacheEntry)MemberwiseClone();
+        clone.Chunks = [.. Chunks];
+        return clone;
+    }
 }
 
 internal enum ProxyCacheSkipReason
@@ -59,8 +96,7 @@ internal sealed class ProxyCacheSkip
 
     public ProxyCacheSkipReason Reason { get; set; }
 
-    public bool Matches(SourceIdentity source)
-        => source.Matches(SourcePath, SourceLength, SourceWriteTimeTicks);
+    public bool Matches(SourceIdentity source) => new SourceIdentity(SourcePath, SourceLength, SourceWriteTimeTicks) == source;
 }
 
 internal sealed class ProxyCacheIndex

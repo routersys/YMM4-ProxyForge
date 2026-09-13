@@ -32,6 +32,7 @@ ClearCache,,すべて削除,Delete all,全部删除,全部刪除,모두 삭제,E
 ColumnFileName,,ファイル名,File name,文件名,檔案名稱,파일 이름,Nombre de archivo,اسم الملف,Nama file
 ColumnResolution,,解像度,Resolution,分辨率,解析度,해상도,Resolución,الدقة,Resolusi
 ColumnScale,,倍率,Scale,倍率,倍率,배율,Escala,المقياس,Skala
+ColumnChunks,,チャンク,Chunks,分块,分塊,청크,Fragmentos,المقاطع,Potongan
 ColumnSize,,サイズ,Size,大小,大小,크기,Tamaño,الحجم,Ukuran
 ColumnLastUsed,,最終利用,Last used,最后使用,最後使用,마지막 사용,Último uso,آخر استخدام,Terakhir digunakan
 GeneratingProxies,,プロキシを生成しています,Generating proxies,正在生成代理,正在產生代理,프록시를 생성하고 있습니다,Generando proxies,جارٍ إنشاء الوكلاء,Sedang membuat proksi

@@ -159,6 +159,7 @@
                                 <GridViewColumn Header="{x:Static root:Texts.ColumnFileName}" DisplayMemberBinding="{Binding FileName}" Width="260"/>
                                 <GridViewColumn Header="{x:Static root:Texts.ColumnResolution}" DisplayMemberBinding="{Binding Resolution}" Width="100"/>
                                 <GridViewColumn Header="{x:Static root:Texts.ColumnScale}" DisplayMemberBinding="{Binding Scale}" Width="60"/>
+                                <GridViewColumn Header="{x:Static root:Texts.ColumnChunks}" DisplayMemberBinding="{Binding Chunks}" Width="80"/>
                                 <GridViewColumn Header="{x:Static root:Texts.ColumnSize}" DisplayMemberBinding="{Binding Size}" Width="90"/>
                                 <GridViewColumn Header="{x:Static root:Texts.ColumnLastUsed}" DisplayMemberBinding="{Binding LastUsed}" Width="120"/>
                             </GridView>

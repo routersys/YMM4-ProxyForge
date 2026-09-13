@@ -4,6 +4,7 @@ using ProxyForge.Encoding;
 using ProxyForge.Export;
 using ProxyForge.Sources;
 using YukkuriMovieMaker.Commons;
+using YukkuriMovieMaker.Plugin.FileSource;
 
 namespace ProxyForge.Tests;
 
@@ -15,11 +16,13 @@ public sealed class ProxySourceProviderTests : IDisposable
     readonly IGraphicsDevicesAndContext context;
     readonly ProxyCache cache;
     readonly ProxyGenerationQueue queue;
+    readonly SourceFocus focus = new();
     readonly ProxyForgeSettings settings = new() { MinimumFileSizeMegabytes = 1, Scale = 50 };
     readonly List<string> opened = [];
+    readonly TaskCompletionSource release = new();
     bool exporting;
     bool refuseAll;
-    bool throwForProxies;
+    bool holdEncodes;
     int encoded;
 
     public ProxySourceProviderTests()
@@ -27,15 +30,12 @@ public sealed class ProxySourceProviderTests : IDisposable
         Directory.CreateDirectory(root);
         context = devices.CreateContext();
         cache = new ProxyCache(Path.Combine(root, "cache"));
-        queue = new ProxyGenerationQueue(cache, Encode, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
-        {
-            CompletedRetention = TimeSpan.FromMilliseconds(50),
-            FailedRetention = TimeSpan.FromMilliseconds(50),
-        };
+        queue = CreateQueue(Open);
     }
 
     public void Dispose()
     {
+        release.TrySetResult();
         queue.CancelAll();
         context.Dispose();
         devices.Dispose();
@@ -48,29 +48,39 @@ public sealed class ProxySourceProviderTests : IDisposable
         }
     }
 
-    Task<ProxyEncodeResult> Encode(ProxyEncodeRequest request, IProgress<double>? progress, CancellationToken cancellationToken)
+    ProxyGenerationQueue CreateQueue(ProxyEncodeSessionFactory open)
+        => new(cache, open, () => new ProxyEncodeOptions(50, 30, 10, false), () => ExportPhase.Idle, focus, _ => { }, TestUiThread.Post)
+        {
+            CompletedRetention = TimeSpan.FromMilliseconds(50),
+            FailedRetention = TimeSpan.FromMilliseconds(50),
+        };
+
+    Task<IProxyEncodeSession> Open(ProxyEncodeRequest request, CancellationToken cancellationToken)
     {
-        encoded++;
-        File.WriteAllBytes(request.OutputPath, new byte[64]);
-        return Task.FromResult(new ProxyEncodeResult(new ProxyGeometry(960, 540), new DisplayBounds(-960f, -540f, 1920f, 1080f), new FrameRate(30, 1), TimeSpan.FromSeconds(2), 60, 64));
+        var analysis = new ProxyAnalysis(new ProxyGeometry(960, 540), new DisplayBounds(-960f, -540f, 1920f, 1080f), new FrameRate(30, 1), TimeSpan.FromSeconds(20), 600);
+        return Task.FromResult<IProxyEncodeSession>(new FakeEncodeSession(analysis, async (_, _, output, _, _) =>
+        {
+            if (holdEncodes)
+                await release.Task;
+            encoded++;
+            File.WriteAllBytes(output, new byte[64]);
+            return 64L;
+        }));
     }
 
-    YukkuriMovieMaker.Plugin.FileSource.IVideoFileSource? Factory(IGraphicsDevicesAndContext devices, string path)
+    IVideoFileSource? Factory(IGraphicsDevicesAndContext target, string path)
     {
         opened.Add(path);
         if (refuseAll)
             return null;
         if (path.StartsWith(cache.DirectoryPath, StringComparison.OrdinalIgnoreCase))
-        {
-            if (throwForProxies)
-                throw new InvalidOperationException("broken proxy");
-            return TestVideoSource.Solid(devices, 960, 540, 30, 1, 60);
-        }
+            return TestVideoSource.Solid(target, 960, 540, 30, 1, 300);
 
-        return TestVideoSource.Solid(devices, 1920, 1080, 30, 1, 60);
+        return TestVideoSource.Solid(target, 1920, 1080, 30, 1, 600);
     }
 
-    ProxySourceProvider CreateProvider() => new(cache, queue, () => exporting, () => settings, Factory);
+    ProxySourceProvider CreateProvider(ProxyGenerationQueue? generation = null)
+        => new(cache, generation ?? queue, focus, () => exporting, () => settings, Factory);
 
     string CreateFile(string name = "source.mp4", int megabytes = 2)
     {
@@ -79,14 +89,12 @@ public sealed class ProxySourceProviderTests : IDisposable
         return path;
     }
 
-    SourceIdentity IdentityOf(string path) => SourceIdentity.Of(path)!.Value;
+    static SourceIdentity IdentityOf(string path) => SourceIdentity.Of(path)!.Value;
 
-    ProxyCacheEntry Seed(string path)
+    ProxyCacheEntry Seed(string path, params int[] chunks)
     {
-        var temporary = cache.CreateTemporaryPath();
-        File.WriteAllBytes(temporary, new byte[64]);
         var identity = IdentityOf(path);
-        return cache.Add(new ProxyCacheEntry
+        var entry = cache.Register(new ProxyCacheEntry
         {
             SourcePath = identity.Path,
             SourceLength = identity.Length,
@@ -100,9 +108,29 @@ public sealed class ProxySourceProviderTests : IDisposable
             DisplayHeight = 1080f,
             FrameRateNumerator = 30,
             FrameRateDenominator = 1,
-            DurationTicks = TimeSpan.FromSeconds(2.5).Ticks,
-            FrameCount = 75,
-        }, temporary);
+            DurationTicks = TimeSpan.FromSeconds(20).Ticks,
+            FrameCount = 600,
+            ChunkLength = 300,
+        });
+        foreach (var chunk in chunks)
+        {
+            var temporary = cache.CreateTemporaryPath();
+            File.WriteAllBytes(temporary, new byte[64]);
+            entry = cache.AddChunk(entry.Id, chunk, temporary)!;
+        }
+
+        return entry;
+    }
+
+    static async Task UpdateUntilAsync(ProxyVideoSource proxy, TimeSpan time, Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 500 && !condition(); attempt++)
+        {
+            proxy.Update(time);
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        Assert.True(condition());
     }
 
     [Fact]
@@ -121,7 +149,7 @@ public sealed class ProxySourceProviderTests : IDisposable
     {
         exporting = true;
         var path = CreateFile();
-        Seed(path);
+        Seed(path, 0, 1);
 
         Assert.Null(CreateProvider().Create(context, path));
         Assert.Empty(opened);
@@ -167,69 +195,87 @@ public sealed class ProxySourceProviderTests : IDisposable
     }
 
     [Fact]
-    public void ACachedProxyIsOpenedWithTheStoredDuration()
+    public void ACompleteEntryIsUsedWithoutOpeningTheOriginalOrEncoding()
     {
         var path = CreateFile();
-        Seed(path);
+        Seed(path, 0, 1);
 
         using var source = CreateProvider().Create(context, path);
 
         var proxy = Assert.IsType<ProxyVideoSource>(source);
+        Assert.False(proxy.HasOriginal);
+        Assert.Equal(TimeSpan.FromSeconds(20), proxy.Duration);
+        Assert.Empty(opened);
+        Assert.False(queue.IsPending(IdentityOf(path), 50));
+
+        proxy.Update(TimeSpan.FromSeconds(12));
+
         Assert.True(proxy.IsProxy);
-        Assert.Equal(TimeSpan.FromSeconds(2.5), proxy.Duration);
-        Assert.EndsWith(ProxyCache.ProxyExtension, Assert.Single(opened));
+        Assert.Equal(1, proxy.ShownChunk);
+        Assert.EndsWith("000001.mp4", Assert.Single(opened));
         Assert.Equal(0, encoded);
     }
 
     [Fact]
-    public async Task ACachedProxyThatCannotBeOpenedIsDroppedAndTheOriginalIsUsed()
+    public async Task APartialEntryIsUsedAndTheRestIsQueued()
     {
         var path = CreateFile();
-        var seeded = Seed(path);
-        throwForProxies = true;
+        Seed(path, 0);
 
         using var source = CreateProvider().Create(context, path);
 
         var proxy = Assert.IsType<ProxyVideoSource>(source);
-        Assert.False(proxy.IsProxy);
-        Assert.DoesNotContain(cache.Snapshot(), entry => entry.Id == seeded.Id);
-        Assert.Equal(2, opened.Count);
+        Assert.False(proxy.HasOriginal);
+        Assert.True(queue.IsPending(IdentityOf(path), 50));
         await queue.WhenIdleAsync();
         Assert.Equal(1, encoded);
+        Assert.True(cache.Find(IdentityOf(path), 50)!.IsComplete);
     }
 
     [Fact]
-    public async Task ANewFileIsWrappedAndQueued()
+    public async Task ANewFileIsWrappedAroundTheOriginalAndQueued()
     {
         var path = CreateFile();
 
         using var source = CreateProvider().Create(context, path);
 
         var proxy = Assert.IsType<ProxyVideoSource>(source);
+        Assert.True(proxy.HasOriginal);
         Assert.False(proxy.IsProxy);
-        Assert.Equal(TimeSpan.FromSeconds(2), proxy.Duration);
+        Assert.Equal(TimeSpan.FromSeconds(20), proxy.Duration);
         Assert.Equal(path, Assert.Single(opened));
         await queue.WhenIdleAsync();
-        Assert.Equal(1, encoded);
-        Assert.NotNull(cache.Find(IdentityOf(path), 50));
+        Assert.Equal(2, encoded);
+        Assert.True(cache.Find(IdentityOf(path), 50)!.IsComplete);
     }
 
     [Fact]
     public async Task AFailedFileYieldsNothingAfterwards()
     {
         var path = CreateFile();
-        refuseAll = true;
-        var failing = new ProxyGenerationQueue(cache, (_, _, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
-        {
-            FailedRetention = TimeSpan.FromMilliseconds(50),
-        };
+        var failing = CreateQueue((_, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"));
         failing.TryEnqueue(IdentityOf(path), 50);
         await failing.WhenIdleAsync();
-        refuseAll = false;
-        var provider = new ProxySourceProvider(cache, failing, () => exporting, () => settings, Factory);
 
-        Assert.Null(provider.Create(context, path));
+        Assert.Null(CreateProvider(failing).Create(context, path));
         Assert.Empty(opened);
+    }
+
+    [Fact]
+    public async Task AFailedFileStillUsesItsFinishedChunks()
+    {
+        var path = CreateFile();
+        Seed(path, 0);
+        var failing = CreateQueue((_, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"));
+        failing.TryEnqueue(IdentityOf(path), 50);
+        await failing.WhenIdleAsync();
+
+        using var source = CreateProvider(failing).Create(context, path);
+
+        var proxy = Assert.IsType<ProxyVideoSource>(source);
+        Assert.False(failing.IsPending(IdentityOf(path), 50));
+        proxy.Update(TimeSpan.Zero);
+        Assert.True(proxy.IsProxy);
     }
 
     [Fact]
@@ -244,15 +290,16 @@ public sealed class ProxySourceProviderTests : IDisposable
     }
 
     [Fact]
-    public void WithoutAutomaticGenerationACachedProxyIsStillUsed()
+    public void WithoutAutomaticGenerationAPartialEntryIsStillUsedButNotQueued()
     {
         settings.GeneratesAutomatically = false;
         var path = CreateFile();
-        Seed(path);
+        Seed(path, 0);
 
         using var source = CreateProvider().Create(context, path);
 
-        Assert.True(Assert.IsType<ProxyVideoSource>(source).IsProxy);
+        Assert.IsType<ProxyVideoSource>(source);
+        Assert.False(queue.IsPending(IdentityOf(path), 50));
     }
 
     [Fact]
@@ -260,32 +307,17 @@ public sealed class ProxySourceProviderTests : IDisposable
     {
         var path = CreateFile();
         var identity = IdentityOf(path);
-        var release = new TaskCompletionSource();
-        var pending = new ProxyGenerationQueue(cache, async (request, _, _) =>
-        {
-            await release.Task;
-            return await Encode(request, null, CancellationToken.None);
-        }, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
-        {
-            CompletedRetention = TimeSpan.FromMilliseconds(50),
-        };
-        pending.TryEnqueue(identity, 50);
+        holdEncodes = true;
+        queue.TryEnqueue(identity, 50);
         settings.GeneratesAutomatically = false;
-        var provider = new ProxySourceProvider(cache, pending, () => exporting, () => settings, Factory);
 
-        using var source = provider.Create(context, path);
+        using var source = CreateProvider().Create(context, path);
 
         var proxy = Assert.IsType<ProxyVideoSource>(source);
-        Assert.False(proxy.IsProxy);
+        Assert.Equal(TimeSpan.FromSeconds(20), proxy.Duration);
         release.SetResult();
-        await pending.WhenIdleAsync();
-        for (var attempt = 0; attempt < 500 && !proxy.IsProxy; attempt++)
-        {
-            proxy.Update(TimeSpan.Zero);
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-
-        Assert.True(proxy.IsProxy);
+        await queue.WhenIdleAsync();
+        await UpdateUntilAsync(proxy, TimeSpan.Zero, () => proxy.IsProxy);
     }
 
     [Fact]
@@ -300,22 +332,29 @@ public sealed class ProxySourceProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task TheWrapperSwitchesToTheProxyOnceItIsGenerated()
+    public async Task TheWrapperSwitchesToTheChunksAsTheyAreGenerated()
     {
         var path = CreateFile();
 
         using var source = CreateProvider().Create(context, path);
         var proxy = Assert.IsType<ProxyVideoSource>(source);
         await queue.WhenIdleAsync();
-        for (var attempt = 0; attempt < 500 && !proxy.IsProxy; attempt++)
-        {
-            proxy.Update(TimeSpan.FromSeconds(1));
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
+        await UpdateUntilAsync(proxy, TimeSpan.FromSeconds(1), () => proxy.IsProxy);
 
-        Assert.True(proxy.IsProxy);
-        Assert.Equal(TimeSpan.FromSeconds(2), proxy.Duration);
-        Assert.Equal(2, opened.Count);
-        Assert.EndsWith(ProxyCache.ProxyExtension, opened[1]);
+        Assert.Equal(0, proxy.ShownChunk);
+        Assert.Equal(TimeSpan.FromSeconds(20), proxy.Duration);
+        Assert.Contains(opened, candidate => candidate.EndsWith("000000.mp4", StringComparison.Ordinal));
+        await UpdateUntilAsync(proxy, TimeSpan.FromSeconds(1), () => !proxy.HasOriginal);
+    }
+
+    [Fact]
+    public void TheFocusFollowsTheRequestedFrame()
+    {
+        var path = CreateFile();
+        using var source = CreateProvider().Create(context, path);
+
+        source!.Update(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(90, focus.Get(IdentityOf(path)));
     }
 }

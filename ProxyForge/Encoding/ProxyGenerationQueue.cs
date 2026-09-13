@@ -7,15 +7,14 @@ using YukkuriMovieMaker.Commons;
 
 namespace ProxyForge.Encoding;
 
-internal delegate Task<ProxyEncodeResult> ProxyEncodeFunction(ProxyEncodeRequest request, IProgress<double>? progress, CancellationToken cancellationToken);
-
-internal readonly record struct ProxyEncodeOptions(int BitrateScale, int KeyFrameInterval, bool UsesHardwareEncoder);
+internal readonly record struct ProxyEncodeOptions(int BitrateScale, int KeyFrameInterval, int ChunkSeconds, bool UsesHardwareEncoder);
 
 internal sealed class ProxyGenerationQueue(
     ProxyCache cache,
-    ProxyEncodeFunction encode,
+    ProxyEncodeSessionFactory open,
     Func<ProxyEncodeOptions> options,
     Func<ExportPhase> exportPhase,
+    SourceFocus focus,
     Action<Exception> reportUnexpected,
     Action<Action> onUi)
 {
@@ -23,9 +22,9 @@ internal sealed class ProxyGenerationQueue(
 
     readonly record struct Key(SourceIdentity Source, int Scale);
 
-    sealed class ItemProgress(ProxyGenerationItem item, Action<Action> onUi) : IProgress<double>
+    sealed class ChunkProgress(ProxyGenerationItem item, int completedChunks, int chunkCount, Action<Action> onUi) : IProgress<double>
     {
-        public void Report(double value) => onUi(() => item.Progress = value);
+        public void Report(double value) => onUi(() => item.Progress = (completedChunks + Math.Clamp(value, 0d, 1d)) / chunkCount);
     }
 
     readonly Lock gate = new();
@@ -35,9 +34,10 @@ internal sealed class ProxyGenerationQueue(
 
     public static ProxyGenerationQueue Shared { get; } = new(
         ProxyCache.Shared,
-        (request, progress, cancellationToken) => new ProxyEncoder(FFmpegRuntime.Executables, VideoSourceLoader.Load).EncodeAsync(request, progress, cancellationToken),
-        () => new ProxyEncodeOptions(ProxyForgeSettings.Default.BitrateScale, ProxyForgeSettings.Default.KeyFrameInterval, ProxyForgeSettings.Default.UsesHardwareEncoder),
+        (request, cancellationToken) => new ProxyEncoder(FFmpegRuntime.Executables, VideoSourceLoader.Load).OpenAsync(request, cancellationToken),
+        () => new ProxyEncodeOptions(ProxyForgeSettings.Default.BitrateScale, ProxyForgeSettings.Default.KeyFrameInterval, ProxyForgeSettings.Default.ChunkSeconds, ProxyForgeSettings.Default.UsesHardwareEncoder),
         ExportDetector.Shared.Resolve,
+        SourceFocus.Shared,
         ProxyForgeTelemetry.Report,
         UiThread.Post);
 
@@ -49,7 +49,9 @@ internal sealed class ProxyGenerationQueue(
 
     public TimeSpan FailedRetention { get; set; } = TimeSpan.FromSeconds(10);
 
-    public event Action<SourceIdentity, int, ProxyCacheEntry>? Completed;
+    public event Action<SourceIdentity, int, ProxyCacheEntry>? ChunkCompleted;
+
+    public event Action<SourceIdentity, int>? EntryDiscarded;
 
     public bool IsPending(SourceIdentity source, int scale)
     {
@@ -129,13 +131,12 @@ internal sealed class ProxyGenerationQueue(
             {
                 await WaitForExportToEndAsync(token).ConfigureAwait(false);
                 onUi(() => item.Status = ProxyGenerationStatus.Generating);
-                var entry = await GenerateAsync(key, item, token).ConfigureAwait(false);
+                await GenerateAsync(key, item, token).ConfigureAwait(false);
                 onUi(() =>
                 {
                     item.Progress = 1d;
                     item.Status = ProxyGenerationStatus.Completed;
                 });
-                Completed?.Invoke(key.Source, key.Scale, entry);
             }
             finally
             {
@@ -183,59 +184,87 @@ internal sealed class ProxyGenerationQueue(
             await Task.Delay(ExportPollInterval, token).ConfigureAwait(false);
     }
 
-    async Task<ProxyCacheEntry> GenerateAsync(Key key, ProxyGenerationItem item, CancellationToken token)
+    async Task GenerateAsync(Key key, ProxyGenerationItem item, CancellationToken token)
     {
-        var temporaryPath = cache.CreateTemporaryPath();
         var current = options();
         var request = new ProxyEncodeRequest(
             key.Source.Path,
-            temporaryPath,
             cache.DirectoryPath,
             key.Scale,
             current.BitrateScale,
             current.KeyFrameInterval,
             current.UsesHardwareEncoder);
 
-        ProxyEncodeResult result;
-        try
-        {
-            result = await encode(request, new ItemProgress(item, onUi), token).ConfigureAwait(false);
-            var latest = SourceIdentity.Of(key.Source.Path);
-            if (latest != key.Source)
-                throw new ProxyEncodeException(ProxyEncodeFailure.SourceChanged, "The source file changed while the proxy was being generated.");
-        }
-        catch
-        {
-            TryDelete(temporaryPath);
-            throw;
-        }
+        using var session = await open(request, token).ConfigureAwait(false);
+        var analysis = session.Analysis;
+        var entry = cache.Register(Describe(key, analysis, ProxyChunkPlan.LengthFor(analysis.FrameRate, current.ChunkSeconds)));
+        var chunkCount = entry.ChunkCount;
+        onUi(() => item.Progress = (double)entry.Chunks.Count / chunkCount);
 
-        return cache.Add(new ProxyCacheEntry
+        while (ProxyChunkPlan.Next(entry.Chunks, chunkCount, entry.ChunkLength, focus.Get(key.Source)) is { } chunk)
         {
-            SourcePath = key.Source.Path,
-            SourceLength = key.Source.Length,
-            SourceWriteTimeTicks = key.Source.WriteTimeTicks,
-            Scale = key.Scale,
-            ProxyWidth = result.Geometry.Width,
-            ProxyHeight = result.Geometry.Height,
-            DisplayLeft = result.Display.Left,
-            DisplayTop = result.Display.Top,
-            DisplayWidth = result.Display.Width,
-            DisplayHeight = result.Display.Height,
-            FrameRateNumerator = result.FrameRate.Numerator,
-            FrameRateDenominator = result.FrameRate.Denominator,
-            DurationTicks = result.Duration.Ticks,
-            FrameCount = result.FrameCount,
-        }, temporaryPath);
+            await WaitForExportToEndAsync(token).ConfigureAwait(false);
+
+            var firstFrame = chunk * entry.ChunkLength;
+            var frameCount = Math.Min(entry.ChunkLength, analysis.FrameCount - firstFrame);
+            var temporaryPath = cache.CreateTemporaryPath();
+            ProxyCacheEntry? updated;
+            try
+            {
+                await session.EncodeAsync(firstFrame, frameCount, temporaryPath, new ChunkProgress(item, entry.Chunks.Count, chunkCount, onUi), token).ConfigureAwait(false);
+                if (SourceIdentity.Of(key.Source.Path) != key.Source)
+                    throw new ProxyEncodeException(ProxyEncodeFailure.SourceChanged, "The source file changed while the proxy was being generated.");
+
+                updated = cache.AddChunk(entry.Id, chunk, temporaryPath);
+            }
+            catch
+            {
+                TryDelete(temporaryPath);
+                throw;
+            }
+
+            if (updated is null)
+                throw new OperationCanceledException();
+
+            entry = updated;
+            onUi(() => item.Progress = (double)entry.Chunks.Count / chunkCount);
+            ChunkCompleted?.Invoke(key.Source, key.Scale, entry);
+        }
     }
+
+    static ProxyCacheEntry Describe(Key key, ProxyAnalysis analysis, int chunkLength) => new()
+    {
+        SourcePath = key.Source.Path,
+        SourceLength = key.Source.Length,
+        SourceWriteTimeTicks = key.Source.WriteTimeTicks,
+        Scale = key.Scale,
+        ProxyWidth = analysis.Geometry.Width,
+        ProxyHeight = analysis.Geometry.Height,
+        DisplayLeft = analysis.Display.Left,
+        DisplayTop = analysis.Display.Top,
+        DisplayWidth = analysis.Display.Width,
+        DisplayHeight = analysis.Display.Height,
+        FrameRateNumerator = analysis.FrameRate.Numerator,
+        FrameRateDenominator = analysis.FrameRate.Denominator,
+        DurationTicks = analysis.Duration.Ticks,
+        FrameCount = analysis.FrameCount,
+        ChunkLength = chunkLength,
+    };
 
     void RememberFailure(Key key, ProxyEncodeException? exception)
     {
         using (gate.EnterScope())
             failures.Add(key);
 
-        if (exception?.Failure == ProxyEncodeFailure.Transparent)
+        if (exception?.Failure is not (ProxyEncodeFailure.Transparent or ProxyEncodeFailure.SourceChanged))
+            return;
+
+        if (exception.Failure == ProxyEncodeFailure.Transparent)
             cache.AddSkip(key.Source, ProxyCacheSkipReason.Transparent);
+
+        var entry = cache.Find(key.Source, key.Scale);
+        if (entry is not null && cache.Remove(entry.Id))
+            EntryDiscarded?.Invoke(key.Source, key.Scale);
     }
 
     static void TryDelete(string path)

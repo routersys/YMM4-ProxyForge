@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -8,7 +9,7 @@ namespace ProxyForge.Cache;
 internal sealed class ProxyCache(string directoryPath)
 {
     public const string IndexFileName = "index.json";
-    public const string ProxyExtension = ".mp4";
+    public const string ChunkExtension = ".mp4";
     public const string TemporaryExtension = ".tmp";
     public const long DefaultLimitBytes = 10L * 1024L * 1024L * 1024L;
 
@@ -54,7 +55,9 @@ internal sealed class ProxyCache(string directoryPath)
         }
     }
 
-    public string GetFilePath(ProxyCacheEntry entry) => GetFilePath(entry.Id);
+    public string GetDirectoryPath(ProxyCacheEntry entry) => GetDirectoryPath(entry.Id);
+
+    public string GetChunkPath(ProxyCacheEntry entry, int chunk) => GetChunkPath(entry.Id, chunk);
 
     public string CreateTemporaryPath()
     {
@@ -75,7 +78,7 @@ internal sealed class ProxyCache(string directoryPath)
             if (entry is null)
                 return null;
 
-            if (!File.Exists(GetFilePath(entry)))
+            if (!Directory.Exists(GetDirectoryPath(entry)))
             {
                 index.Entries.Remove(entry);
                 Save();
@@ -88,6 +91,15 @@ internal sealed class ProxyCache(string directoryPath)
         }
     }
 
+    public ProxyCacheEntry? Get(Guid id)
+    {
+        using (gate.EnterScope())
+        {
+            EnsureLoaded();
+            return index.Entries.FirstOrDefault(candidate => candidate.Id == id)?.Clone();
+        }
+    }
+
     public bool IsSkipped(SourceIdentity source)
     {
         using (gate.EnterScope())
@@ -97,7 +109,41 @@ internal sealed class ProxyCache(string directoryPath)
         }
     }
 
-    public ProxyCacheEntry Add(ProxyCacheEntry entry, string temporaryPath)
+    public ProxyCacheEntry Register(ProxyCacheEntry layout)
+    {
+        if (!layout.HasValidLayout)
+            throw new ArgumentException("The entry needs a positive frame count and chunk length.", nameof(layout));
+
+        using (gate.EnterScope())
+        {
+            EnsureLoaded();
+
+            var existing = index.Entries.FirstOrDefault(candidate => candidate.Matches(layout.Source, layout.Scale));
+            if (existing is not null && existing.HasSameLayout(layout) && Directory.Exists(GetDirectoryPath(existing)))
+            {
+                existing.LastUsedTicks = DateTime.UtcNow.Ticks;
+                Save();
+                return existing.Clone();
+            }
+
+            if (existing is not null && TryDeleteDirectory(GetDirectoryPath(existing)))
+                index.Entries.Remove(existing);
+
+            var entry = layout.Clone();
+            entry.Id = Guid.NewGuid();
+            entry.Chunks = [];
+            entry.FileLength = 0L;
+            var now = DateTime.UtcNow.Ticks;
+            entry.CreatedTicks = now;
+            entry.LastUsedTicks = now;
+            Directory.CreateDirectory(GetDirectoryPath(entry));
+            index.Entries.Add(entry);
+            Save();
+            return entry.Clone();
+        }
+    }
+
+    public ProxyCacheEntry? AddChunk(Guid id, int chunk, string temporaryPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(temporaryPath);
 
@@ -105,22 +151,48 @@ internal sealed class ProxyCache(string directoryPath)
         {
             EnsureLoaded();
 
-            entry.Id = Guid.NewGuid();
-            var now = DateTime.UtcNow.Ticks;
-            entry.CreatedTicks = now;
-            entry.LastUsedTicks = now;
-            entry.FileLength = new FileInfo(temporaryPath).Length;
-            File.Move(temporaryPath, GetFilePath(entry), true);
-
-            var source = new SourceIdentity(entry.SourcePath, entry.SourceLength, entry.SourceWriteTimeTicks);
-            foreach (var stale in index.Entries.Where(candidate => candidate.Matches(source, entry.Scale)).ToArray())
+            var entry = index.Entries.FirstOrDefault(candidate => candidate.Id == id);
+            if (entry is null || chunk < 0 || chunk >= entry.ChunkCount)
             {
-                if (TryDeleteFile(GetFilePath(stale)))
-                    index.Entries.Remove(stale);
+                TryDeleteFile(temporaryPath);
+                return null;
             }
 
-            index.Entries.Add(entry);
+            var length = new FileInfo(temporaryPath).Length;
+            var path = GetChunkPath(entry, chunk);
+            Directory.CreateDirectory(GetDirectoryPath(entry));
+            if (entry.HasChunk(chunk))
+                entry.FileLength -= FileLengthOf(path);
+            File.Move(temporaryPath, path, true);
+
+            if (!entry.HasChunk(chunk))
+            {
+                entry.Chunks.Add(chunk);
+                entry.Chunks.Sort();
+            }
+
+            entry.FileLength += length;
+            entry.LastUsedTicks = DateTime.UtcNow.Ticks;
             TrimCore(entry);
+            Save();
+            return entry.Clone();
+        }
+    }
+
+    public ProxyCacheEntry? ForgetChunk(Guid id, int chunk)
+    {
+        using (gate.EnterScope())
+        {
+            EnsureLoaded();
+
+            var entry = index.Entries.FirstOrDefault(candidate => candidate.Id == id);
+            if (entry is null || !entry.HasChunk(chunk))
+                return entry?.Clone();
+
+            var path = GetChunkPath(entry, chunk);
+            entry.FileLength -= FileLengthOf(path);
+            entry.Chunks.Remove(chunk);
+            TryDeleteFile(path);
             Save();
             return entry.Clone();
         }
@@ -151,7 +223,7 @@ internal sealed class ProxyCache(string directoryPath)
             var entry = index.Entries.FirstOrDefault(candidate => candidate.Id == id);
             if (entry is null)
                 return false;
-            if (!TryDeleteFile(GetFilePath(entry)))
+            if (!TryDeleteDirectory(GetDirectoryPath(entry)))
                 return false;
 
             index.Entries.Remove(entry);
@@ -168,7 +240,7 @@ internal sealed class ProxyCache(string directoryPath)
             var removed = 0;
             foreach (var entry in index.Entries.ToArray())
             {
-                if (!TryDeleteFile(GetFilePath(entry)))
+                if (!TryDeleteDirectory(GetDirectoryPath(entry)))
                     continue;
 
                 index.Entries.Remove(entry);
@@ -202,7 +274,9 @@ internal sealed class ProxyCache(string directoryPath)
         }
     }
 
-    string GetFilePath(Guid id) => Path.Combine(DirectoryPath, id.ToString("N") + ProxyExtension);
+    string GetDirectoryPath(Guid id) => Path.Combine(DirectoryPath, id.ToString("N"));
+
+    string GetChunkPath(Guid id, int chunk) => Path.Combine(GetDirectoryPath(id), chunk.ToString("D6", CultureInfo.InvariantCulture) + ChunkExtension);
 
     void EnsureLoaded()
     {
@@ -213,18 +287,52 @@ internal sealed class ProxyCache(string directoryPath)
         Directory.CreateDirectory(DirectoryPath);
         var dirty = !TryReadIndex(out index);
 
-        dirty |= index.Entries.RemoveAll(entry => !File.Exists(GetFilePath(entry))) > 0;
-        var known = index.Entries.Select(entry => GetFilePath(entry)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        dirty |= index.Entries.RemoveAll(entry => !entry.HasValidLayout || !Directory.Exists(GetDirectoryPath(entry))) > 0;
+        foreach (var entry in index.Entries)
+            dirty |= Reconcile(entry);
+
+        var known = index.Entries.Select(entry => GetDirectoryPath(entry)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var file in Directory.EnumerateFiles(DirectoryPath))
         {
-            var extension = Path.GetExtension(file);
-            if (string.Equals(extension, TemporaryExtension, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(extension, ProxyExtension, StringComparison.OrdinalIgnoreCase) && !known.Contains(file))
+            if (!string.Equals(file, IndexPath, StringComparison.OrdinalIgnoreCase))
                 TryDeleteFile(file);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(DirectoryPath))
+        {
+            if (!known.Contains(directory))
+                TryDeleteDirectory(directory);
         }
 
         if (dirty)
             Save();
+    }
+
+    bool Reconcile(ProxyCacheEntry entry)
+    {
+        var directory = GetDirectoryPath(entry);
+        var listed = entry.Chunks.Where(chunk => chunk >= 0 && chunk < entry.ChunkCount).Distinct().ToList();
+        var expected = listed.ToDictionary(chunk => GetChunkPath(entry, chunk), chunk => chunk, StringComparer.OrdinalIgnoreCase);
+        var present = new List<int>();
+        var total = 0L;
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            if (expected.TryGetValue(file, out var chunk))
+            {
+                present.Add(chunk);
+                total += FileLengthOf(file);
+            }
+            else
+            {
+                TryDeleteFile(file);
+            }
+        }
+
+        present.Sort();
+        var changed = !present.SequenceEqual(entry.Chunks) || total != entry.FileLength;
+        entry.Chunks = present;
+        entry.FileLength = total;
+        return changed;
     }
 
     bool TryReadIndex(out ProxyCacheIndex read)
@@ -244,6 +352,8 @@ internal sealed class ProxyCache(string directoryPath)
             parsed.Skips ??= [];
             var broken = parsed.Entries.RemoveAll(entry => entry is null || entry.Id == Guid.Empty || string.IsNullOrEmpty(entry.SourcePath))
                 + parsed.Skips.RemoveAll(skip => skip is null || string.IsNullOrEmpty(skip.SourcePath));
+            foreach (var entry in parsed.Entries)
+                entry.Chunks ??= [];
             read = parsed;
             return broken == 0;
         }
@@ -277,7 +387,7 @@ internal sealed class ProxyCache(string directoryPath)
         {
             if (total <= LimitBytes)
                 break;
-            if (!TryDeleteFile(GetFilePath(entry)))
+            if (!TryDeleteDirectory(GetDirectoryPath(entry)))
                 continue;
 
             index.Entries.Remove(entry);
@@ -286,6 +396,12 @@ internal sealed class ProxyCache(string directoryPath)
         }
 
         return removed;
+    }
+
+    static long FileLengthOf(string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists ? file.Length : 0L;
     }
 
     static bool TryDeleteFile(string path)
@@ -298,6 +414,21 @@ internal sealed class ProxyCache(string directoryPath)
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             Log.Default.Write($"ProxyForge: キャッシュのファイルを削除できませんでした。{path}", exception);
+            return false;
+        }
+    }
+
+    static bool TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Log.Default.Write($"ProxyForge: キャッシュのフォルダーを削除できませんでした。{path}", exception);
             return false;
         }
     }

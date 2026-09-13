@@ -1,4 +1,5 @@
 using System.Numerics;
+using ProxyForge.Cache;
 using Vortice.Direct2D1;
 using Vortice.Direct2D1.Effects;
 using YukkuriMovieMaker.Commons;
@@ -8,145 +9,200 @@ namespace ProxyForge.Sources;
 
 internal sealed class ProxyVideoSource : IVideoFileSource
 {
-    readonly Lock gate = new();
+    public const int OpenChunkRadius = 1;
+
+    readonly IGraphicsDevicesAndContext devices;
+    readonly SourceIdentity identity;
+    readonly ProxyChunkLoader loader;
+    readonly VideoSourceFactory factory;
+    readonly SourceFocus focus;
     readonly AffineTransform2D transform;
     readonly ID2D1Image output;
-    readonly TimeSpan duration;
-    IVideoFileSource inner;
-    IGraphicsDevicesAndContext? innerContext;
-    FrameRate? frameRate;
-    ProxyUpgrade? pending;
-    IDisposable? loader;
+    readonly Dictionary<int, OpenedChunk> chunks = [];
+    IVideoFileSource? original;
+    ProxyCacheEntry? layout;
+    ID2D1Image? input;
+    int? shownChunk;
+    bool originalUnavailable;
     bool disposed;
 
-    ProxyVideoSource(IGraphicsDevicesAndContext devices, IVideoFileSource inner, TimeSpan duration, Matrix3x2 matrix, FrameRate? frameRate)
+    public ProxyVideoSource(
+        IGraphicsDevicesAndContext devices,
+        SourceIdentity identity,
+        IVideoFileSource? original,
+        ProxyCacheEntry? entry,
+        ProxyChunkLoader loader,
+        VideoSourceFactory factory,
+        SourceFocus focus)
     {
-        this.inner = inner;
-        this.duration = duration;
-        this.frameRate = frameRate;
+        if (original is null && entry is null)
+            throw new ArgumentException("Either the original source or a cache entry is required.", nameof(entry));
+
+        this.devices = devices;
+        this.identity = identity;
+        this.original = original;
+        this.loader = loader;
+        this.factory = factory;
+        this.focus = focus;
+        layout = entry;
         transform = new AffineTransform2D(devices.DeviceContext)
         {
             InterPolationMode = AffineTransform2DInterpolationMode.Cubic,
             BorderMode = BorderMode.Hard,
-            TransformMatrix = matrix,
+            TransformMatrix = Matrix3x2.Identity,
         };
-        transform.SetInput(0, inner.Output, true);
         output = transform.Output;
     }
 
-    public static ProxyVideoSource FromOriginal(IGraphicsDevicesAndContext devices, IVideoFileSource original)
-        => new(devices, original, original.Duration, Matrix3x2.Identity, null);
-
-    public static ProxyVideoSource FromProxy(IGraphicsDevicesAndContext devices, OpenedProxy proxy, TimeSpan duration)
-        => new(devices, proxy.Source, duration, proxy.Transform, proxy.FrameRate);
-
-    public TimeSpan Duration => duration;
+    public TimeSpan Duration => layout is { } known ? new TimeSpan(known.DurationTicks) : original!.Duration;
 
     public ID2D1Image Output => output;
 
-    public bool IsProxy
-    {
-        get
-        {
-            using (gate.EnterScope())
-                return frameRate is not null;
-        }
-    }
+    public bool IsProxy => shownChunk is not null;
 
-    public void AttachLoader(IDisposable loader)
-    {
-        using (gate.EnterScope())
-        {
-            if (disposed)
-            {
-                loader.Dispose();
-                return;
-            }
+    public int? ShownChunk => shownChunk;
 
-            this.loader = loader;
-        }
-    }
+    public int OpenChunkCount => chunks.Count;
 
-    public bool TryHandOver(ProxyUpgrade upgrade)
-    {
-        using (gate.EnterScope())
-        {
-            if (disposed || frameRate is not null || pending is not null)
-                return false;
+    public bool HasOriginal => original is not null;
 
-            pending = upgrade;
-            return true;
-        }
-    }
+    public int GetFrameIndex(TimeSpan time)
+        => layout is { } known ? new FrameRate(known.FrameRateNumerator, known.FrameRateDenominator).GetFrameIndex(time) : original!.GetFrameIndex(time);
 
     public void Update(TimeSpan time)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
-        ProxyUpgrade? upgrade;
-        using (gate.EnterScope())
+        var entry = loader.Entry;
+        if (entry is not null)
+            layout = entry;
+
+        var frameRate = layout is { } known ? new FrameRate(known.FrameRateNumerator, known.FrameRateDenominator) : default;
+        var frame = layout is null ? original!.GetFrameIndex(time) : frameRate.GetContainingFrame(time);
+        focus.Report(identity, frame);
+
+        if (entry is null)
         {
-            upgrade = pending;
-            pending = null;
+            Evict(null);
+            ShowOriginal(time);
+            return;
         }
 
-        if (upgrade is not null)
-            Apply(upgrade);
-
-        inner.Update(time);
-    }
-
-    public int GetFrameIndex(TimeSpan time)
-    {
-        FrameRate? rate;
-        using (gate.EnterScope())
-            rate = frameRate;
-
-        return rate is { } known ? known.GetFrameIndex(time) : inner.GetFrameIndex(time);
-    }
-
-    void Apply(ProxyUpgrade upgrade)
-    {
-        var previous = inner;
-        transform.SetInput(0, upgrade.Proxy.Source.Output, true);
-        transform.TransformMatrix = upgrade.Proxy.Transform;
-        inner = upgrade.Proxy.Source;
-        innerContext = upgrade.Context;
-        previous.Dispose();
-
-        IDisposable? attached;
-        using (gate.EnterScope())
+        var chunk = Math.Min(frame / entry.ChunkLength, entry.ChunkCount - 1);
+        TakeLoaded();
+        if (!chunks.ContainsKey(chunk) && entry.HasChunk(chunk))
         {
-            frameRate = upgrade.Proxy.FrameRate;
-            attached = loader;
-            loader = null;
+            if (original is null && !originalUnavailable)
+            {
+                var opened = loader.Open(devices, chunk);
+                if (opened is not null)
+                    chunks[chunk] = opened;
+            }
+            else
+            {
+                loader.Request(chunk);
+            }
         }
 
-        attached?.Dispose();
+        if (!chunks.ContainsKey(chunk + 1) && entry.HasChunk(chunk + 1))
+            loader.Request(chunk + 1);
+
+        if (!chunks.TryGetValue(chunk, out var current))
+        {
+            Evict(chunk);
+            ShowOriginal(time);
+            return;
+        }
+
+        current.Source.Update(time - frameRate.GetFrameStart(chunk * entry.ChunkLength));
+        Show(current.Source.Output, current.Transform, chunk);
+        Evict(chunk);
+        if (entry.IsComplete)
+            DisposeOriginal();
+    }
+
+    void ShowOriginal(TimeSpan time)
+    {
+        if (original is null && !originalUnavailable)
+        {
+            original = factory(devices, identity.Path);
+            if (original is null)
+            {
+                originalUnavailable = true;
+                Log.Default.Write($"ProxyForge: 元の動画を開けなかったため、プロキシの無い区間は描画できません。{identity.Path}");
+            }
+        }
+
+        if (original is null)
+        {
+            Show(null, Matrix3x2.Identity, null);
+            return;
+        }
+
+        original.Update(time);
+        Show(original.Output, Matrix3x2.Identity, null);
+    }
+
+    void Show(ID2D1Image? image, Matrix3x2 matrix, int? chunk)
+    {
+        if (!ReferenceEquals(input, image))
+        {
+            transform.SetInput(0, image, true);
+            input = image;
+        }
+
+        transform.TransformMatrix = matrix;
+        shownChunk = chunk;
+    }
+
+    void TakeLoaded()
+    {
+        foreach (var (index, opened) in loader.TakeLoaded())
+        {
+            if (chunks.TryAdd(index, opened))
+                continue;
+
+            opened.Dispose();
+        }
+    }
+
+    void Evict(int? keep)
+    {
+        foreach (var (index, opened) in chunks.ToArray())
+        {
+            if (keep is { } center && Math.Abs(index - center) <= OpenChunkRadius)
+                continue;
+
+            chunks.Remove(index);
+            if (ReferenceEquals(input, opened.Source.Output))
+                Show(null, Matrix3x2.Identity, null);
+            opened.Dispose();
+        }
+    }
+
+    void DisposeOriginal()
+    {
+        if (original is null || ReferenceEquals(input, original.Output))
+            return;
+
+        original.Dispose();
+        original = null;
     }
 
     public void Dispose()
     {
-        ProxyUpgrade? orphan;
-        IDisposable? attached;
-        using (gate.EnterScope())
-        {
-            if (disposed)
-                return;
+        if (disposed)
+            return;
 
-            disposed = true;
-            orphan = pending;
-            pending = null;
-            attached = loader;
-            loader = null;
-        }
-
-        attached?.Dispose();
-        orphan?.Dispose();
+        disposed = true;
+        loader.Dispose();
         output.Dispose();
         transform.SetInput(0, null, true);
         transform.Dispose();
-        inner.Dispose();
-        innerContext?.Dispose();
+        foreach (var opened in chunks.Values)
+            opened.Dispose();
+        chunks.Clear();
+        original?.Dispose();
+        original = null;
     }
 }

@@ -10,28 +10,36 @@ namespace ProxyForge.Encoding;
 
 internal readonly record struct ProxyEncodeRequest(
     string SourcePath,
-    string OutputPath,
     string WorkingDirectory,
     int Scale,
     int BitrateScale,
     int KeyFrameInterval,
     bool UsesHardwareEncoder);
 
-internal sealed record ProxyEncodeResult(
+internal sealed record ProxyAnalysis(
     ProxyGeometry Geometry,
     DisplayBounds Display,
     FrameRate FrameRate,
     TimeSpan Duration,
-    int FrameCount,
-    long FileLength);
+    int FrameCount);
+
+internal interface IProxyEncodeSession : IDisposable
+{
+    ProxyAnalysis Analysis { get; }
+
+    Task<long> EncodeAsync(int firstFrame, int frameCount, string outputPath, IProgress<double>? progress, CancellationToken cancellationToken);
+}
+
+internal delegate Task<IProxyEncodeSession> ProxyEncodeSessionFactory(ProxyEncodeRequest request, CancellationToken cancellationToken);
 
 internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFactory sourceFactory)
 {
     const int DiagnosticExcerptLength = 200;
 
-    public async Task<ProxyEncodeResult> EncodeAsync(ProxyEncodeRequest request, IProgress<double>? progress, CancellationToken cancellationToken)
+    public async Task<IProxyEncodeSession> OpenAsync(ProxyEncodeRequest request, CancellationToken cancellationToken)
     {
-        ValidateRequest(request);
+        if (string.IsNullOrEmpty(request.SourcePath) || !Path.IsPathFullyQualified(request.SourcePath))
+            throw new ArgumentException("The source path must be fully qualified.", nameof(request));
 
         if (!executables.IsAvailable)
             throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegUnavailable, "The FFmpeg executable bundled with YukkuriMovieMaker could not be located.");
@@ -79,45 +87,13 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
                 request.WorkingDirectory,
                 cancellationToken).ConfigureAwait(false);
 
-            var encodeRequest = new FFmpegEncodeRequest(
-                request.OutputPath,
-                geometry.Width,
-                geometry.Height,
-                frameRate,
-                FFmpegArguments.CalculateVideoBitrate(geometry.Width, geometry.Height, frameRate.Value, request.BitrateScale),
-                Math.Max(1, request.KeyFrameInterval),
-                videoEncoder);
-
-            var pump = new FramePump(source, renderer, frameRate, frameCount, geometry, progress);
-
-            var result = await FFmpegProcessRunner.RunAsync(
-                executables.FFmpegPath,
-                arguments => FFmpegArguments.WriteEncode(arguments, in encodeRequest),
-                request.WorkingDirectory,
-                pump.WriteAsync,
-                ProcessPriorityClass.BelowNormal,
-                cancellationToken).ConfigureAwait(false);
-
-            if (!result.IsSuccess)
-            {
-                Log.Default.Write(string.Concat("ProxyForge: ffmpeg が失敗しました。", Environment.NewLine, result.Diagnostics));
-                throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, string.Concat(
-                    "ffmpeg exited with code ",
-                    result.ExitCode.ToString(CultureInfo.InvariantCulture),
-                    ": ",
-                    result.FirstDiagnosticLine(DiagnosticExcerptLength)));
-            }
-
-            var output = new FileInfo(request.OutputPath);
-            if (!output.Exists || output.Length == 0)
-                throw new ProxyEncodeException(ProxyEncodeFailure.NoOutput, "ffmpeg completed without producing a proxy file.");
-
-            return new ProxyEncodeResult(geometry, display, frameRate, duration, frameCount, output.Length);
-        }
-        catch
-        {
-            TryDelete(request.OutputPath);
-            throw;
+            var analysis = new ProxyAnalysis(geometry, display, frameRate, duration, frameCount);
+            var session = new Session(executables, request, analysis, videoEncoder, devices, context, source, renderer);
+            devices = null;
+            context = null;
+            source = null;
+            renderer = null;
+            return session;
         }
         finally
         {
@@ -126,16 +102,6 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
             context?.Dispose();
             devices?.Dispose();
         }
-    }
-
-    static void ValidateRequest(ProxyEncodeRequest request)
-    {
-        if (string.IsNullOrEmpty(request.SourcePath) || !Path.IsPathFullyQualified(request.SourcePath))
-            throw new ArgumentException("The source path must be fully qualified.", nameof(request));
-
-        var directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.WorkingDirectory)) + Path.DirectorySeparatorChar;
-        if (!Path.GetFullPath(request.OutputPath).StartsWith(directory, StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("The output path must be inside the working directory.", nameof(request));
     }
 
     static void TryDelete(string path)
@@ -151,10 +117,97 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
         }
     }
 
+    sealed class Session(
+        FFmpegExecutables executables,
+        ProxyEncodeRequest request,
+        ProxyAnalysis analysis,
+        string videoEncoder,
+        GraphicsDevices devices,
+        IGraphicsDevicesAndContext context,
+        IVideoFileSource source,
+        ProxyFrameRenderer renderer) : IProxyEncodeSession
+    {
+        bool disposed;
+
+        public ProxyAnalysis Analysis => analysis;
+
+        public async Task<long> EncodeAsync(int firstFrame, int frameCount, string outputPath, IProgress<double>? progress, CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            ArgumentOutOfRangeException.ThrowIfNegative(firstFrame);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameCount);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(firstFrame + frameCount, analysis.FrameCount);
+
+            var directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.WorkingDirectory)) + Path.DirectorySeparatorChar;
+            if (!Path.GetFullPath(outputPath).StartsWith(directory, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("The output path must be inside the working directory.", nameof(outputPath));
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var geometry = analysis.Geometry;
+            var frameRate = analysis.FrameRate;
+            var encodeRequest = new FFmpegEncodeRequest(
+                outputPath,
+                geometry.Width,
+                geometry.Height,
+                frameRate,
+                FFmpegArguments.CalculateVideoBitrate(geometry.Width, geometry.Height, frameRate.Value, request.BitrateScale),
+                Math.Max(1, request.KeyFrameInterval),
+                videoEncoder);
+
+            var pump = new FramePump(source, renderer, frameRate, firstFrame, frameCount, geometry, progress);
+
+            try
+            {
+                var result = await FFmpegProcessRunner.RunAsync(
+                    executables.FFmpegPath,
+                    arguments => FFmpegArguments.WriteEncode(arguments, in encodeRequest),
+                    request.WorkingDirectory,
+                    pump.WriteAsync,
+                    ProcessPriorityClass.BelowNormal,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (!result.IsSuccess)
+                {
+                    Log.Default.Write(string.Concat("ProxyForge: ffmpeg が失敗しました。", Environment.NewLine, result.Diagnostics));
+                    throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, string.Concat(
+                        "ffmpeg exited with code ",
+                        result.ExitCode.ToString(CultureInfo.InvariantCulture),
+                        ": ",
+                        result.FirstDiagnosticLine(DiagnosticExcerptLength)));
+                }
+
+                var output = new FileInfo(outputPath);
+                if (!output.Exists || output.Length == 0)
+                    throw new ProxyEncodeException(ProxyEncodeFailure.NoOutput, "ffmpeg completed without producing a proxy file.");
+
+                return output.Length;
+            }
+            catch
+            {
+                TryDelete(outputPath);
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+
+            disposed = true;
+            renderer.Dispose();
+            source.Dispose();
+            context.Dispose();
+            devices.Dispose();
+        }
+    }
+
     sealed class FramePump(
         IVideoFileSource source,
         ProxyFrameRenderer renderer,
         FrameRate frameRate,
+        int firstFrame,
         int frameCount,
         ProxyGeometry geometry,
         IProgress<double>? progress)
@@ -183,7 +236,7 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    source.Update(frameRate.GetSampleTime(index));
+                    source.Update(frameRate.GetSampleTime(firstFrame + index));
                     renderer.Render(frame);
                     if (!FrameAlpha.IsOpaque(frame, geometry.Width, geometry.Height))
                         throw new ProxyEncodeException(ProxyEncodeFailure.Transparent, "The video contains transparent pixels.");

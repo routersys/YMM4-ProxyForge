@@ -14,6 +14,7 @@ internal static class ProxyForgeHost
     public static ProxySourceProvider Provider { get; } = new(
         ProxyCache.Shared,
         ProxyGenerationQueue.Shared,
+        SourceFocus.Shared,
         ExportDetector.Shared.IsExporting,
         () => ProxyForgeSettings.Default,
         VideoSourceLoader.Load);

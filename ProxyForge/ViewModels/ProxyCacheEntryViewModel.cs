@@ -15,6 +15,8 @@ internal sealed class ProxyCacheEntryViewModel(ProxyCacheEntry entry)
 
     public string Scale { get; } = string.Create(CultureInfo.InvariantCulture, $"{entry.Scale}%");
 
+    public string Chunks { get; } = string.Create(CultureInfo.InvariantCulture, $"{entry.Chunks.Count}/{entry.ChunkCount}");
+
     public long Bytes { get; } = entry.FileLength;
 
     public string Size { get; } = ByteText.Format(entry.FileLength);

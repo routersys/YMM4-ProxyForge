@@ -4,6 +4,7 @@ using System.IO;
 using ProxyForge.Cache;
 using ProxyForge.Encoding;
 using ProxyForge.Export;
+using ProxyForge.Sources;
 using ProxyForge.ViewModels;
 using ProxyForge.Views;
 
@@ -94,6 +95,9 @@ public sealed class ProxyCacheEntryViewModelTests
             ProxyWidth = 960,
             ProxyHeight = 540,
             FileLength = 1536,
+            FrameCount = 250,
+            ChunkLength = 100,
+            Chunks = [0, 2],
             LastUsedTicks = lastUsed.Ticks,
         };
 
@@ -106,6 +110,7 @@ public sealed class ProxyCacheEntryViewModelTests
         Assert.Equal("50%", viewModel.Scale);
         Assert.Equal(1536L, viewModel.Bytes);
         Assert.Equal("1.5 KB", viewModel.Size);
+        Assert.Equal("2/3", viewModel.Chunks);
         Assert.Equal(lastUsed.ToLocalTime().ToString("yyyy/MM/dd HH:mm", System.Globalization.CultureInfo.InvariantCulture), viewModel.LastUsed);
     }
 }
@@ -271,7 +276,7 @@ public sealed class ProxyForgeSettingsViewModelTests : IDisposable
     {
         Directory.CreateDirectory(root);
         cache = new ProxyCache(Path.Combine(root, "cache"));
-        queue = new ProxyGenerationQueue(cache, (_, _, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post);
+        queue = new ProxyGenerationQueue(cache, (_, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, 10, false), () => ExportPhase.Idle, new SourceFocus(), _ => { }, TestUiThread.Post);
     }
 
     public void Dispose()
@@ -295,7 +300,7 @@ public sealed class ProxyForgeSettingsViewModelTests : IDisposable
         var identity = SourceIdentity.Of(path)!.Value;
         var temporary = cache.CreateTemporaryPath();
         File.WriteAllBytes(temporary, new byte[length]);
-        return cache.Add(new ProxyCacheEntry
+        var registered = cache.Register(new ProxyCacheEntry
         {
             SourcePath = identity.Path,
             SourceLength = identity.Length,
@@ -308,8 +313,10 @@ public sealed class ProxyForgeSettingsViewModelTests : IDisposable
             FrameRateNumerator = 30,
             FrameRateDenominator = 1,
             DurationTicks = 1,
-            FrameCount = 1,
-        }, temporary);
+            FrameCount = 2,
+            ChunkLength = 1,
+        });
+        return cache.AddChunk(registered.Id, 0, temporary)!;
     }
 
     [Fact]

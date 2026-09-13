@@ -140,14 +140,26 @@
   {
     "name": "失敗した出力を消さない",
     "file": "ProxyForge/Encoding/ProxyEncoder.cs",
-    "find": "TryDelete(request.OutputPath);",
-    "replace": "_ = request.OutputPath;"
+    "find": "TryDelete(outputPath);",
+    "replace": "_ = outputPath;"
+  },
+  {
+    "name": "範囲の先頭を無視して先頭から符号化する",
+    "file": "ProxyForge/Encoding/ProxyEncoder.cs",
+    "find": "source.Update(frameRate.GetSampleTime(firstFrame + index));",
+    "replace": "source.Update(frameRate.GetSampleTime(index));"
+  },
+  {
+    "name": "範囲の上限を検査しない",
+    "file": "ProxyForge/Encoding/ProxyEncoder.cs",
+    "find": "            ArgumentOutOfRangeException.ThrowIfGreaterThan(firstFrame + frameCount, analysis.FrameCount);\r\n",
+    "replace": ""
   },
   {
     "name": "最終利用を更新しない",
     "file": "ProxyForge/Cache/ProxyCache.cs",
-    "find": "entry.LastUsedTicks = DateTime.UtcNow.Ticks;",
-    "replace": "_ = DateTime.UtcNow.Ticks;"
+    "find": "entry.LastUsedTicks = DateTime.UtcNow.Ticks;\r\n            Save();\r\n            return entry.Clone();",
+    "replace": "Save();\r\n            return entry.Clone();"
   },
   {
     "name": "新しい方から削る",
@@ -168,10 +180,34 @@
     "replace": "TrimCore(null);"
   },
   {
-    "name": "索引にある動画も孤児として消す",
+    "name": "索引にあるフォルダーも孤児として消す",
     "file": "ProxyForge/Cache/ProxyCache.cs",
-    "find": "&& !known.Contains(file))",
-    "replace": "&& true)"
+    "find": "if (!known.Contains(directory))",
+    "replace": "if (true)"
+  },
+  {
+    "name": "読み込み時に無いチャンクを索引に残す",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "        entry.Chunks = present;\r\n",
+    "replace": "        entry.Chunks = listed;\r\n"
+  },
+  {
+    "name": "チャンクの追加で範囲外を受け付ける",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "if (entry is null || chunk < 0 || chunk >= entry.ChunkCount)",
+    "replace": "if (entry is null)"
+  },
+  {
+    "name": "同じ配置の登録で既存を捨てる",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "if (existing is not null && existing.HasSameLayout(layout) && Directory.Exists(GetDirectoryPath(existing)))",
+    "replace": "if (false)"
+  },
+  {
+    "name": "チャンクの追加で自身を保護せずに切り詰める",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "            TrimCore(entry);\r\n            Save();\r\n            return entry.Clone();",
+    "replace": "            TrimCore(null);\r\n            Save();\r\n            return entry.Clone();"
   },
   {
     "name": "除外の判定で元ファイルを見ない",
@@ -332,14 +368,50 @@
   {
     "name": "透明以外の失敗を除外として記録する",
     "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
-    "find": "if (exception?.Failure == ProxyEncodeFailure.Transparent)",
-    "replace": "if (exception?.Failure != ProxyEncodeFailure.Transparent)"
+    "find": "if (exception.Failure == ProxyEncodeFailure.Transparent)",
+    "replace": "if (exception.Failure != ProxyEncodeFailure.Transparent)"
   },
   {
     "name": "元ファイルの変更を見逃す",
     "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
-    "find": "if (latest is null || !latest.Value.Matches(key.Source.Path, key.Source.Length, key.Source.WriteTimeTicks))",
+    "find": "if (SourceIdentity.Of(key.Source.Path) != key.Source)",
     "replace": "if (false)"
+  },
+  {
+    "name": "透明と変更以外でも項目を捨てる",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "        if (exception?.Failure is not (ProxyEncodeFailure.Transparent or ProxyEncodeFailure.SourceChanged))\r\n            return;\r\n\r\n",
+    "replace": ""
+  },
+  {
+    "name": "注目位置を無視して先頭から生成する",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "focus.Get(key.Source)",
+    "replace": "null"
+  },
+  {
+    "name": "チャンクの間で出力を待たない",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "            await WaitForExportToEndAsync(token).ConfigureAwait(false);\r\n\r\n            var firstFrame",
+    "replace": "            var firstFrame"
+  },
+  {
+    "name": "追加に失敗しても続ける",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "            if (updated is null)\r\n                throw new OperationCanceledException();\r\n\r\n",
+    "replace": ""
+  },
+  {
+    "name": "注目より前のチャンクを生成しない",
+    "file": "ProxyForge/Encoding/ProxyChunkPlan.cs",
+    "find": "        for (var chunk = 0; chunk < start; chunk++)\r\n        {\r\n            if (!completed.Contains(chunk))\r\n                return chunk;\r\n        }\r\n\r\n",
+    "replace": ""
+  },
+  {
+    "name": "チャンクの長さに秒数を掛けない",
+    "file": "ProxyForge/Encoding/ProxyChunkPlan.cs",
+    "find": "Math.Round(frameRate.Value * seconds, MidpointRounding.AwayFromZero)",
+    "replace": "Math.Round(frameRate.Value, MidpointRounding.AwayFromZero)"
   },
   {
     "name": "最小サイズちょうどを対象外にする",
@@ -350,8 +422,14 @@
   {
     "name": "自動生成が無効なら生成中でも待たない",
     "file": "ProxyForge/Sources/ProxySourceProvider.cs",
-    "find": "if (!current.GeneratesAutomatically && !queue.IsPending(source, scale))",
-    "replace": "if (!current.GeneratesAutomatically)"
+    "find": "!current.GeneratesAutomatically && !queue.IsPending(source, scale)",
+    "replace": "!current.GeneratesAutomatically"
+  },
+  {
+    "name": "完成した項目でも生成を頼む",
+    "file": "ProxyForge/Sources/ProxySourceProvider.cs",
+    "find": "if (current.GeneratesAutomatically && (entry is null || !entry.IsComplete))",
+    "replace": "if (current.GeneratesAutomatically)"
   },
   {
     "name": "除外した動画も対象にする",
@@ -360,16 +438,76 @@
     "replace": "|| false)"
   },
   {
-    "name": "二重の引き渡しを受け付ける",
+    "name": "次のチャンクを先読みしない",
     "file": "ProxyForge/Sources/ProxyVideoSource.cs",
-    "find": "if (disposed || frameRate is not null || pending is not null)",
-    "replace": "if (disposed)"
+    "find": "        if (!chunks.ContainsKey(chunk + 1) && entry.HasChunk(chunk + 1))\r\n            loader.Request(chunk + 1);\r\n\r\n",
+    "replace": ""
   },
   {
-    "name": "切り替えた後の元のソースを解放しない",
+    "name": "揃っても元動画を解放しない",
     "file": "ProxyForge/Sources/ProxyVideoSource.cs",
-    "find": "previous.Dispose();",
-    "replace": "_ = previous;"
+    "find": "        if (entry.IsComplete)\r\n            DisposeOriginal();\r\n",
+    "replace": ""
+  },
+  {
+    "name": "遠いチャンクを閉じない",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "if (keep is { } center && Math.Abs(index - center) <= OpenChunkRadius)",
+    "replace": "if (keep is not null)"
+  },
+  {
+    "name": "元動画が無くても同期で開かない",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "if (original is null && !originalUnavailable)\r\n            {\r\n                var opened = loader.Open(devices, chunk);",
+    "replace": "if (false)\r\n            {\r\n                var opened = loader.Open(devices, chunk);"
+  },
+  {
+    "name": "チャンクの時刻をずらさない",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "current.Source.Update(time - frameRate.GetFrameStart(chunk * entry.ChunkLength));",
+    "replace": "current.Source.Update(time);"
+  },
+  {
+    "name": "丸めた番号でチャンクを選ぶ",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "var frame = layout is null ? original!.GetFrameIndex(time) : frameRate.GetContainingFrame(time);",
+    "replace": "var frame = layout is null ? original!.GetFrameIndex(time) : frameRate.GetFrameIndex(time);"
+  },
+  {
+    "name": "注目位置を報告しない",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "        focus.Report(identity, frame);\r\n",
+    "replace": ""
+  },
+  {
+    "name": "開けないチャンクを索引に残す",
+    "file": "ProxyForge/Sources/ProxyChunkLoader.cs",
+    "find": "var forgotten = cache.ForgetChunk(current.Id, chunk);",
+    "replace": "var forgotten = current;"
+  },
+  {
+    "name": "読み込み中の重複を許す",
+    "file": "ProxyForge/Sources/ProxyChunkLoader.cs",
+    "find": " || loading.Contains(chunk) || loaded.ContainsKey(chunk))",
+    "replace": ")"
+  },
+  {
+    "name": "別の倍率の完了も受け取る",
+    "file": "ProxyForge/Sources/ProxyChunkLoader.cs",
+    "find": "if (completedScale != scale || completedSource != source)",
+    "replace": "if (completedSource != source)"
+  },
+  {
+    "name": "破棄後に読み込んだチャンクを保持する",
+    "file": "ProxyForge/Sources/ProxyChunkLoader.cs",
+    "find": "                if (disposed || opened is null)\r\n                    opened?.Dispose();",
+    "replace": "                if (opened is null)\r\n                    opened?.Dispose();"
+  },
+  {
+    "name": "含むフレームを切り上げる",
+    "file": "ProxyForge/Sources/FrameRate.cs",
+    "find": "var frame = (Int128)time.Ticks * Numerator / ((Int128)Denominator * TimeSpan.TicksPerSecond);",
+    "replace": "var frame = (Int128)time.Ticks * Numerator / ((Int128)Denominator * TimeSpan.TicksPerSecond) + 1;"
   },
   {
     "name": "空の読み込み順で先頭を読む",

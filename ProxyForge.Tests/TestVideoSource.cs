@@ -24,8 +24,14 @@ internal sealed class TestVideoSource : IVideoFileSource
     readonly ID2D1Image output;
     readonly int frameRateNumerator;
     readonly int frameRateDenominator;
+    readonly int width;
+    readonly int height;
+    readonly Func<int, int, int, (byte Blue, byte Green, byte Red, byte Alpha)>? framePixelOf;
+    int uploadedFrame = -1;
 
     public int UpdateCount { get; private set; }
+
+    public List<int> RequestedFrames { get; } = [];
 
     public bool IsDisposed { get; private set; }
 
@@ -43,32 +49,21 @@ internal sealed class TestVideoSource : IVideoFileSource
         int frameRateDenominator,
         int frameCount,
         Func<int, int, (byte Blue, byte Green, byte Red, byte Alpha)> pixelOf,
-        TestCentering centering = TestCentering.Floor)
+        TestCentering centering = TestCentering.Floor,
+        Func<int, int, int, (byte Blue, byte Green, byte Red, byte Alpha)>? framePixelOf = null)
     {
         this.frameRateNumerator = frameRateNumerator;
         this.frameRateDenominator = frameRateDenominator;
+        this.width = width;
+        this.height = height;
+        this.framePixelOf = framePixelOf;
         Duration = TimeSpan.FromTicks(frameCount * TimeSpan.TicksPerSecond * frameRateDenominator / frameRateNumerator);
-
-        var stride = width * 4;
-        var pixels = new byte[stride * height];
-        for (var y = 0; y < height; y++)
-        {
-            for (var x = 0; x < width; x++)
-            {
-                var (blue, green, red, alpha) = pixelOf(x, y);
-                var offset = y * stride + x * 4;
-                pixels[offset] = Premultiply(blue, alpha);
-                pixels[offset + 1] = Premultiply(green, alpha);
-                pixels[offset + 2] = Premultiply(red, alpha);
-                pixels[offset + 3] = alpha;
-            }
-        }
 
         var pixelFormat = new PixelFormat(Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied);
         bitmap = devices.DeviceContext.CreateBitmap(
-            new SizeI(width, height), nint.Zero, stride,
+            new SizeI(width, height), nint.Zero, width * 4,
             new BitmapProperties1(pixelFormat, ReferenceDpi, ReferenceDpi, BitmapOptions.None));
-        bitmap.CopyFromMemory(pixels, stride);
+        Upload(pixelOf);
 
         this.centering = new AffineTransform2D(devices.DeviceContext);
         this.centering.SetInput(0, bitmap, true);
@@ -94,6 +89,33 @@ internal sealed class TestVideoSource : IVideoFileSource
     {
         UpdateCount++;
         LastUpdateTime = time;
+        var frame = time <= TimeSpan.Zero ? 0 : (int)((Int128)time.Ticks * frameRateNumerator / ((Int128)frameRateDenominator * TimeSpan.TicksPerSecond));
+        RequestedFrames.Add(frame);
+        if (framePixelOf is null || frame == uploadedFrame)
+            return;
+
+        uploadedFrame = frame;
+        Upload((x, y) => framePixelOf(frame, x, y));
+    }
+
+    void Upload(Func<int, int, (byte Blue, byte Green, byte Red, byte Alpha)> pixelOf)
+    {
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var (blue, green, red, alpha) = pixelOf(x, y);
+                var offset = y * stride + x * 4;
+                pixels[offset] = Premultiply(blue, alpha);
+                pixels[offset + 1] = Premultiply(green, alpha);
+                pixels[offset + 2] = Premultiply(red, alpha);
+                pixels[offset + 3] = alpha;
+            }
+        }
+
+        bitmap.CopyFromMemory(pixels, stride);
     }
 
     public int GetFrameIndex(TimeSpan time) => FrameTime.TimeToFrame(time, frameRateNumerator, frameRateDenominator);

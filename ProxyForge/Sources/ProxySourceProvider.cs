@@ -8,6 +8,7 @@ namespace ProxyForge.Sources;
 internal sealed class ProxySourceProvider(
     ProxyCache cache,
     ProxyGenerationQueue queue,
+    SourceFocus focus,
     Func<bool> isExporting,
     Func<ProxyForgeSettings> settings,
     VideoSourceFactory factory)
@@ -24,44 +25,21 @@ internal sealed class ProxySourceProvider(
 
         var scale = current.Scale;
         var entry = cache.Find(source, scale);
-        if (entry is not null)
+        if (entry is null && (queue.HasFailed(source, scale) || !current.GeneratesAutomatically && !queue.IsPending(source, scale)))
+            return null;
+
+        IVideoFileSource? original = null;
+        if (entry is null)
         {
-            var proxy = TryOpen(devices, entry);
-            if (proxy is not null)
-                return ProxyVideoSource.FromProxy(devices, proxy.Value, new TimeSpan(entry.DurationTicks));
+            original = factory(devices, filePath);
+            if (original is null)
+                return null;
         }
 
-        if (queue.HasFailed(source, scale))
-            return null;
-        if (!current.GeneratesAutomatically && !queue.IsPending(source, scale))
-            return null;
-
-        var original = factory(devices, filePath);
-        if (original is null)
-            return null;
-
-        if (current.GeneratesAutomatically)
+        if (current.GeneratesAutomatically && (entry is null || !entry.IsComplete))
             queue.TryEnqueue(source, scale);
 
-        var wrapper = ProxyVideoSource.FromOriginal(devices, original);
-        wrapper.AttachLoader(new ProxyUpgradeLoader(wrapper, devices, source, scale, cache, queue, factory));
-        return wrapper;
-    }
-
-    OpenedProxy? TryOpen(IGraphicsDevicesAndContext devices, ProxyCacheEntry entry)
-    {
-        try
-        {
-            var opened = OpenedProxy.Open(devices, cache.GetFilePath(entry), entry, factory);
-            if (opened is not null)
-                return opened;
-        }
-        catch (Exception exception)
-        {
-            Log.Default.Write($"ProxyForge: キャッシュしたプロキシを開けませんでした。{entry.SourcePath}", exception);
-        }
-
-        cache.Remove(entry.Id);
-        return null;
+        var loader = new ProxyChunkLoader(devices, source, scale, entry, cache, queue, factory);
+        return new ProxyVideoSource(devices, source, original, entry, loader, factory, focus);
     }
 }
