@@ -29,9 +29,5 @@ internal static class ProxyGeometryCalculator
     }
 
     static int ScaleDimension(int dimension, int scale)
-    {
-        var scaled = AlignEven((int)Math.Round(dimension * (double)scale / MaximumScale, MidpointRounding.AwayFromZero));
-        var limit = AlignEven(dimension);
-        return scaled > limit ? limit : scaled;
-    }
+        => AlignEven((int)Math.Round(dimension * (double)scale / MaximumScale, MidpointRounding.AwayFromZero));
 }
