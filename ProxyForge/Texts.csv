@@ -1,3 +1,48 @@
 Key,Parameter,ja-jp,en-us,zh-cn,zh-tw,ko-kr,es-es,ar-sa,id-id
 ProxyForge,,ProxyForge,ProxyForge,ProxyForge,ProxyForge,ProxyForge,ProxyForge,ProxyForge,ProxyForge
 UpdateAvailableMessage,,新しいバージョン {0} が公開されています。,A new version {0} is available.,已发布新版本 {0}。,已發布新版本 {0}。,새 버전 {0}이(가) 공개되었습니다.,La nueva versión {0} está disponible.,الإصدار الجديد {0} متاح الآن.,Versi baru {0} telah tersedia.
+PluginOrder,,読み込み順,Load order,读取顺序,讀取順序,불러오기 순서,Orden de carga,ترتيب التحميل,Urutan pemuatan
+PluginOrderFirst,,先頭にあります,First in the order,位于最前,位於最前,맨 앞에 있습니다,Primero en el orden,في المقدمة,Berada di urutan pertama
+PluginOrderNotFirst,,先頭にありません。プロキシは使われません。,Not first in the order. Proxies are not used.,不在最前。不会使用代理。,不在最前。不會使用代理。,맨 앞에 있지 않습니다. 프록시는 사용되지 않습니다.,No es el primero. No se usan los proxies.,ليس في المقدمة. لن تُستخدم الوكلاء.,Tidak berada di urutan pertama. Proksi tidak digunakan.
+MoveToFront,,先頭へ移動,Move to the front,移到最前,移到最前,맨 앞으로 이동,Mover al principio,نقل إلى المقدمة,Pindahkan ke depan
+FFmpegLabel,,ffmpeg,ffmpeg,ffmpeg,ffmpeg,ffmpeg,ffmpeg,ffmpeg,ffmpeg
+FFmpegAvailable,,使用できます,Available,可用,可用,사용할 수 있습니다,Disponible,متاح,Tersedia
+FFmpegUnavailable,,見つかりません,Not found,未找到,未找到,찾을 수 없습니다,No encontrado,غير موجود,Tidak ditemukan
+GenerationCountFormat,,生成中: {0} 件,Generating: {0},生成中: {0} 个,產生中: {0} 個,생성 중: {0}개,Generando: {0},قيد الإنشاء: {0},Sedang dibuat: {0}
+ShowProgressWindow,,生成の進捗をウィンドウで表示する,Show generation progress in a window,在窗口中显示生成进度,在視窗中顯示產生進度,생성 진행 상황을 창에 표시,Mostrar el progreso de generación en una ventana,إظهار تقدم الإنشاء في نافذة,Tampilkan progres pembuatan di jendela
+ProxySettings,,プロキシ,Proxy,代理,代理,프록시,Proxy,الوكيل,Proksi
+UseProxy,,プロキシを使用する,Use proxies,使用代理,使用代理,프록시 사용,Usar proxies,استخدام الوكلاء,Gunakan proksi
+GenerateAutomatically,,プロキシを自動で生成する,Generate proxies automatically,自动生成代理,自動產生代理,프록시를 자동으로 생성,Generar proxies automáticamente,إنشاء الوكلاء تلقائيًا,Buat proksi secara otomatis
+ScaleLabel,,解像度,Resolution,分辨率,解析度,해상도,Resolución,الدقة,Resolusi
+MinimumFileSize,,対象にする最小サイズ,Minimum file size,最小文件大小,最小檔案大小,최소 파일 크기,Tamaño mínimo de archivo,الحد الأدنى لحجم الملف,Ukuran file minimum
+EncodingSettings,,エンコード,Encoding,编码,編碼,인코딩,Codificación,الترميز,Encoding
+BitrateScaleLabel,,ビットレートの倍率,Bitrate scale,比特率倍率,位元率倍率,비트레이트 배율,Escala de bitrate,مقياس معدل البت,Skala bitrate
+KeyFrameIntervalLabel,,キーフレームの間隔,Keyframe interval,关键帧间隔,關鍵影格間隔,키프레임 간격,Intervalo de fotogramas clave,الفاصل بين الإطارات المفتاحية,Interval keyframe
+UnitFrames,,フレーム,frames,帧,影格,프레임,fotogramas,إطارات,frame
+UseHardwareEncoder,,ハードウェアエンコーダーを使用する,Use a hardware encoder,使用硬件编码器,使用硬體編碼器,하드웨어 인코더 사용,Usar un codificador por hardware,استخدام مُرمِّز العتاد,Gunakan encoder perangkat keras
+CacheSettings,,キャッシュ,Cache,缓存,快取,캐시,Caché,ذاكرة التخزين المؤقت,Cache
+CacheLimit,,上限,Limit,上限,上限,상한,Límite,الحد الأقصى,Batas
+CacheSummaryFormat,,{0} 件、{1},"{0} items, {1}",{0} 个，{1},{0} 個，{1},"{0}개, {1}","{0} elementos, {1}",{0} عناصر، {1},"{0} item, {1}"
+Refresh,,更新,Refresh,刷新,重新整理,새로 고침,Actualizar,تحديث,Segarkan
+OpenCacheDirectory,,フォルダーを開く,Open the folder,打开文件夹,開啟資料夾,폴더 열기,Abrir la carpeta,فتح المجلد,Buka folder
+RemoveCacheEntry,,選んだプロキシを削除,Delete the selected proxy,删除所选代理,刪除所選代理,선택한 프록시 삭제,Eliminar el proxy seleccionado,حذف الوكيل المحدد,Hapus proksi yang dipilih
+ClearCache,,すべて削除,Delete all,全部删除,全部刪除,모두 삭제,Eliminar todo,حذف الكل,Hapus semua
+ColumnFileName,,ファイル名,File name,文件名,檔案名稱,파일 이름,Nombre de archivo,اسم الملف,Nama file
+ColumnResolution,,解像度,Resolution,分辨率,解析度,해상도,Resolución,الدقة,Resolusi
+ColumnScale,,倍率,Scale,倍率,倍率,배율,Escala,المقياس,Skala
+ColumnSize,,サイズ,Size,大小,大小,크기,Tamaño,الحجم,Ukuran
+ColumnLastUsed,,最終利用,Last used,最后使用,最後使用,마지막 사용,Último uso,آخر استخدام,Terakhir digunakan
+GeneratingProxies,,プロキシを生成しています,Generating proxies,正在生成代理,正在產生代理,프록시를 생성하고 있습니다,Generando proxies,جارٍ إنشاء الوكلاء,Sedang membuat proksi
+StatusWaiting,,待機中,Waiting,等待中,等待中,대기 중,En espera,في الانتظار,Menunggu
+StatusGenerating,,生成中,Generating,生成中,產生中,생성 중,Generando,قيد الإنشاء,Sedang dibuat
+StatusCompleted,,完了,Completed,完成,完成,완료,Completado,مكتمل,Selesai
+StatusCancelled,,中止,Cancelled,已中止,已中止,중단됨,Cancelado,أُلغي,Dibatalkan
+StatusFailed,,失敗,Failed,失败,失敗,실패,Error,فشل,Gagal
+FailureFFmpegUnavailable,,ffmpeg が見つかりません,ffmpeg was not found,未找到 ffmpeg,未找到 ffmpeg,ffmpeg를 찾을 수 없습니다,No se encontró ffmpeg,لم يتم العثور على ffmpeg,ffmpeg tidak ditemukan
+FailureSourceUnavailable,,動画を開けません,The video cannot be opened,无法打开视频,無法開啟影片,동영상을 열 수 없습니다,No se puede abrir el vídeo,تعذر فتح الفيديو,Video tidak dapat dibuka
+FailureNoFrames,,フレームがありません,The video has no frames,视频没有帧,影片沒有影格,프레임이 없습니다,El vídeo no tiene fotogramas,لا يحتوي الفيديو على إطارات,Video tidak memiliki frame
+FailureUnusableSize,,画像の大きさを扱えません,The image size cannot be handled,无法处理图像大小,無法處理影像大小,이미지 크기를 처리할 수 없습니다,No se puede manejar el tamaño de la imagen,تعذر التعامل مع حجم الصورة,Ukuran gambar tidak dapat ditangani
+FailureTransparent,,透明を含むため対象外です,Excluded because it contains transparency,包含透明，因此不适用,包含透明，因此不適用,투명을 포함하므로 대상에서 제외됩니다,Excluido porque contiene transparencia,مستبعد لاحتوائه على شفافية,Dikecualikan karena mengandung transparansi
+FailureFFmpegFailed,,ffmpeg が失敗しました,ffmpeg failed,ffmpeg 失败,ffmpeg 失敗,ffmpeg가 실패했습니다,ffmpeg falló,فشل ffmpeg,ffmpeg gagal
+FailureNoOutput,,出力が作られませんでした,No output was produced,未生成输出,未產生輸出,출력이 만들어지지 않았습니다,No se produjo ninguna salida,لم يتم إنتاج أي مخرجات,Tidak ada keluaran yang dihasilkan
+FailureSourceChanged,,元の動画が変更されました,The source video was modified,源视频已被修改,來源影片已被修改,원본 동영상이 변경되었습니다,El vídeo de origen fue modificado,تم تعديل الفيديو المصدر,Video sumber telah diubah
