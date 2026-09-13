@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="ProxyForge/ProxyForge.csproj" />
+  <Project Path="ProxyForge.Tests/ProxyForge.Tests.csproj" />
   <Project Path="YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator.csproj" />
   <Project Path="YukkuriMovieMaker.Generator/YukkuriMovieMaker.Generator.Build/YukkuriMovieMaker.Generator.Build.csproj">
     <BuildType Solution="*|*" Project="Debug" />
