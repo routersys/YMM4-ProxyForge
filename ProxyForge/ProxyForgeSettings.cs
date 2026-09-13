@@ -1,5 +1,6 @@
 using ProxyForge.Cache;
 using ProxyForge.Encoding;
+using ProxyForge.Views;
 using YukkuriMovieMaker.Plugin;
 
 namespace ProxyForge;
@@ -33,9 +34,9 @@ internal sealed class ProxyForgeSettings : SettingsBase<ProxyForgeSettings>
 
     public override string Name => Texts.ProxyForge;
 
-    public override bool HasSettingView => false;
+    public override bool HasSettingView => true;
 
-    public override object? SettingView => null;
+    public override object? SettingView => new ProxyForgeSettingsView();
 
     public bool IsEnabled
     {
