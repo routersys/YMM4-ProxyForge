@@ -15,6 +15,7 @@ public enum ProxyGenerationStatus
 internal sealed class ProxyGenerationItem(string sourcePath, int scale) : Bindable
 {
     double progress;
+    ProxyChunkCoverage coverage = ProxyChunkCoverage.Empty;
     ProxyGenerationStatus status;
     ProxyEncodeFailure? failure;
 
@@ -28,6 +29,12 @@ internal sealed class ProxyGenerationItem(string sourcePath, int scale) : Bindab
     {
         get => progress;
         set => Set(ref progress, value);
+    }
+
+    public ProxyChunkCoverage Coverage
+    {
+        get => coverage;
+        set => Set(ref coverage, value);
     }
 
     public ProxyGenerationStatus Status

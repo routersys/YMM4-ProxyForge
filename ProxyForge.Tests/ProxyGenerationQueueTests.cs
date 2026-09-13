@@ -149,6 +149,7 @@ public sealed class ProxyGenerationQueueTests : IDisposable
         var started = new TaskCompletionSource();
         var release = new TaskCompletionSource();
         var progressed = new List<double>();
+        var covered = new List<ProxyChunkCoverage>();
         var queue = CreateQueue(async (_, _, output, progress, _) =>
         {
             started.TrySetResult();
@@ -161,10 +162,13 @@ public sealed class ProxyGenerationQueueTests : IDisposable
         queue.TryEnqueue(source, 50);
         await started.Task;
         var item = TestUiThread.Read(() => Assert.Single(queue.Items));
+        Assert.Equal(new ProxyChunkCoverage(2, [], 0, 0d), item.Coverage, CoverageComparer.Instance);
         item.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(ProxyGenerationItem.Progress))
                 progressed.Add(item.Progress);
+            if (e.PropertyName == nameof(ProxyGenerationItem.Coverage))
+                covered.Add(item.Coverage);
         };
         Assert.Equal(source.Path, item.SourcePath);
         Assert.Equal("source.mp4", item.FileName);
@@ -180,7 +184,20 @@ public sealed class ProxyGenerationQueueTests : IDisposable
         Assert.Equal(progressed.OrderBy(value => value), progressed);
         Assert.Contains(0.25d, progressed);
         Assert.Contains(0.5d, progressed);
+        Assert.Contains(new ProxyChunkCoverage(2, [], 0, 0.5d), covered, CoverageComparer.Instance);
+        Assert.Contains(new ProxyChunkCoverage(2, [0], 1, 0.5d), covered, CoverageComparer.Instance);
+        Assert.Equal(new ProxyChunkCoverage(2, [0, 1], null, 0d), item.Coverage, CoverageComparer.Instance);
         await WaitUntilAsync(() => queue.Items.Count == 0);
+    }
+
+    sealed class CoverageComparer : IEqualityComparer<ProxyChunkCoverage>
+    {
+        public static CoverageComparer Instance { get; } = new();
+
+        public bool Equals(ProxyChunkCoverage? x, ProxyChunkCoverage? y)
+            => x is not null && y is not null && x.ChunkCount == y.ChunkCount && x.Chunks.SequenceEqual(y.Chunks) && x.CurrentChunk == y.CurrentChunk && x.CurrentProgress == y.CurrentProgress;
+
+        public int GetHashCode(ProxyChunkCoverage coverage) => HashCode.Combine(coverage.ChunkCount, coverage.Chunks.Count, coverage.CurrentChunk, coverage.CurrentProgress);
     }
 
     [Fact]

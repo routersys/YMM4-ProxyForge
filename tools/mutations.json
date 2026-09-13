@@ -538,5 +538,41 @@
     "file": "ProxyForge/Views/GenerationProgressWindowHost.cs",
     "find": "=> itemCount > 0 && enabled && !hiddenByUser;",
     "replace": "=> itemCount > 0 && enabled;"
+  },
+  {
+    "name": "網羅の描画で範囲外のチャンクも描く",
+    "file": "ProxyForge/Views/ChunkCoverageBar.cs",
+    "find": ".Where(chunk => chunk >= 0 && chunk < coverage.ChunkCount)",
+    "replace": ""
+  },
+  {
+    "name": "網羅の描画で隣り合うチャンクを繋げない",
+    "file": "ProxyForge/Views/ChunkCoverageBar.cs",
+    "find": "while (index + 1 < chunks.Length && chunks[index + 1] == last + 1)",
+    "replace": "while (false)"
+  },
+  {
+    "name": "網羅の描画で生成中のチャンクを描かない",
+    "file": "ProxyForge/Views/ChunkCoverageBar.cs",
+    "find": "&& !coverage.Contains(current) && coverage.CurrentProgress > 0d)",
+    "replace": "&& false)"
+  },
+  {
+    "name": "網羅の描画で進み具合を上限で切らない",
+    "file": "ProxyForge/Views/ChunkCoverageBar.cs",
+    "find": "Math.Min(coverage.CurrentProgress, 1d) / count",
+    "replace": "coverage.CurrentProgress / count"
+  },
+  {
+    "name": "生成中のチャンクを網羅に載せない",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "                Publish(item, entry, chunk);\r\n",
+    "replace": ""
+  },
+  {
+    "name": "チャンクの完了を網羅に載せない",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "            Publish(item, entry, null);\r\n            ChunkCompleted",
+    "replace": "            ChunkCompleted"
   }
 ]

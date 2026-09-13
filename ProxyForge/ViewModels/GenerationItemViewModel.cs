@@ -21,6 +21,8 @@ internal sealed class GenerationItemViewModel : Bindable
 
     public double Percentage => Item.Progress * 100d;
 
+    public ProxyChunkCoverage Coverage => Item.Coverage;
+
     public bool IsWaiting => Item.Status == ProxyGenerationStatus.Waiting;
 
     public string StatusText => Item.Status switch
@@ -51,6 +53,9 @@ internal sealed class GenerationItemViewModel : Bindable
         {
             case nameof(ProxyGenerationItem.Progress):
                 OnPropertyChanged(nameof(Percentage));
+                break;
+            case nameof(ProxyGenerationItem.Coverage):
+                OnPropertyChanged(nameof(Coverage));
                 break;
             case nameof(ProxyGenerationItem.Status):
             case nameof(ProxyGenerationItem.Failure):

@@ -22,9 +22,17 @@ internal sealed class ProxyGenerationQueue(
 
     readonly record struct Key(SourceIdentity Source, int Scale);
 
-    sealed class ChunkProgress(ProxyGenerationItem item, int completedChunks, int chunkCount, Action<Action> onUi) : IProgress<double>
+    sealed class ChunkProgress(ProxyGenerationItem item, ProxyCacheEntry entry, int chunk, Action<Action> onUi) : IProgress<double>
     {
-        public void Report(double value) => onUi(() => item.Progress = (completedChunks + Math.Clamp(value, 0d, 1d)) / chunkCount);
+        public void Report(double value)
+        {
+            var fraction = Math.Clamp(value, 0d, 1d);
+            onUi(() =>
+            {
+                item.Progress = (entry.Chunks.Count + fraction) / entry.ChunkCount;
+                item.Coverage = new ProxyChunkCoverage(entry.ChunkCount, entry.Chunks, chunk, fraction);
+            });
+        }
     }
 
     readonly Lock gate = new();
@@ -199,7 +207,7 @@ internal sealed class ProxyGenerationQueue(
         var analysis = session.Analysis;
         var entry = cache.Register(Describe(key, analysis, ProxyChunkPlan.LengthFor(analysis.FrameRate, current.ChunkSeconds)));
         var chunkCount = entry.ChunkCount;
-        onUi(() => item.Progress = (double)entry.Chunks.Count / chunkCount);
+        Publish(item, entry, null);
 
         while (ProxyChunkPlan.Next(entry.Chunks, chunkCount, entry.ChunkLength, focus.Get(key.Source)) is { } chunk)
         {
@@ -211,7 +219,8 @@ internal sealed class ProxyGenerationQueue(
             ProxyCacheEntry? updated;
             try
             {
-                await session.EncodeAsync(firstFrame, frameCount, temporaryPath, new ChunkProgress(item, entry.Chunks.Count, chunkCount, onUi), token).ConfigureAwait(false);
+                Publish(item, entry, chunk);
+                await session.EncodeAsync(firstFrame, frameCount, temporaryPath, new ChunkProgress(item, entry, chunk, onUi), token).ConfigureAwait(false);
                 if (SourceIdentity.Of(key.Source.Path) != key.Source)
                     throw new ProxyEncodeException(ProxyEncodeFailure.SourceChanged, "The source file changed while the proxy was being generated.");
 
@@ -227,10 +236,17 @@ internal sealed class ProxyGenerationQueue(
                 throw new OperationCanceledException();
 
             entry = updated;
-            onUi(() => item.Progress = (double)entry.Chunks.Count / chunkCount);
+            Publish(item, entry, null);
             ChunkCompleted?.Invoke(key.Source, key.Scale, entry);
         }
     }
+
+    void Publish(ProxyGenerationItem item, ProxyCacheEntry entry, int? chunk)
+        => onUi(() =>
+        {
+            item.Progress = (double)entry.Chunks.Count / entry.ChunkCount;
+            item.Coverage = new ProxyChunkCoverage(entry.ChunkCount, entry.Chunks, chunk, 0d);
+        });
 
     static ProxyCacheEntry Describe(Key key, ProxyAnalysis analysis, int chunkLength) => new()
     {

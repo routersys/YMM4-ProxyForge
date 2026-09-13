@@ -135,6 +135,12 @@ public sealed class GenerationItemViewModelTests
         Assert.Equal(25d, viewModel.Percentage);
         Assert.Contains(nameof(GenerationItemViewModel.Percentage), raised);
 
+        Assert.Same(ProxyChunkCoverage.Empty, viewModel.Coverage);
+        var coverage = new ProxyChunkCoverage(4, [1], 2, 0.5d);
+        item.Coverage = coverage;
+        Assert.Same(coverage, viewModel.Coverage);
+        Assert.Contains(nameof(GenerationItemViewModel.Coverage), raised);
+
         item.Status = ProxyGenerationStatus.Generating;
         Assert.False(viewModel.IsWaiting);
         Assert.Equal(Texts.StatusGenerating, viewModel.StatusText);

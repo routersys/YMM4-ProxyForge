@@ -5,6 +5,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:root="clr-namespace:ProxyForge"
         xmlns:vm="clr-namespace:ProxyForge.ViewModels"
+        xmlns:views="clr-namespace:ProxyForge.Views"
         xmlns:host="clr-namespace:YukkuriMovieMaker.Resources.Localization;assembly=YukkuriMovieMaker.Plugin"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type={x:Type vm:GenerationProgressViewModel}}"
@@ -15,11 +16,11 @@
     <Window.Style>
         <Style TargetType="{x:Type Window}" BasedOn="{StaticResource {x:Type Window}}"/>
     </Window.Style>
-    <Grid Margin="8">
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="26"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="26"/>
         </Grid.RowDefinitions>
         <TextBlock Grid.Row="0" Text="{x:Static root:Texts.GeneratingProxies}" VerticalAlignment="Center"/>
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -33,7 +34,8 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{Binding FileName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                             <Grid Grid.Row="1">
-                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percentage, Mode=OneWay}" IsIndeterminate="{Binding IsWaiting}"/>
+                                <ProgressBar Minimum="0" Maximum="100" Value="0" IsIndeterminate="{Binding IsWaiting}"/>
+                                <views:ChunkCoverageBar Margin="1" Coverage="{Binding Coverage}"/>
                                 <TextBlock Text="{Binding StatusText}" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                             </Grid>
                         </Grid>
@@ -41,9 +43,9 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Width="100" Content="{x:Static host:Texts.CancelButtonContent}" Command="{Binding CancelCommand}"/>
-            <Button Width="100" Margin="8,0,0,0" Content="{x:Static host:Texts.CloseButtonContent}" Click="OnCloseClick"/>
-        </StackPanel>
+        <UniformGrid Grid.Row="2" Rows="1" Columns="2">
+            <Button Content="{x:Static host:Texts.CancelButtonContent}" Command="{Binding CancelCommand}"/>
+            <Button Content="{x:Static host:Texts.CloseButtonContent}" Click="OnCloseClick"/>
+        </UniformGrid>
     </Grid>
 </Window>
