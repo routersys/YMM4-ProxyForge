@@ -332,7 +332,6 @@ public sealed class ProxyEncoderTests
             },
             workspace.Path,
             null,
-            null,
             ProcessPriorityClass.BelowNormal,
             cancellation.Token));
 
@@ -361,7 +360,6 @@ public sealed class ProxyEncoderTests
                 arguments.Add("-");
             },
             workspace.Path,
-            null,
             null,
             ProcessPriorityClass.BelowNormal,
             TestContext.Current.CancellationToken);
@@ -395,7 +393,6 @@ public sealed class ProxyEncoderTests
                 arguments.Add("-");
             },
             workspace.Path,
-            null,
             null,
             ProcessPriorityClass.BelowNormal,
             TestContext.Current.CancellationToken);
@@ -435,7 +432,6 @@ public sealed class ProxyEncoderTests
             Path.Combine(workspace.Path, "missing-ffmpeg.exe"),
             static arguments => arguments.Add("-version"),
             workspace.Path,
-            null,
             null,
             ProcessPriorityClass.BelowNormal,
             TestContext.Current.CancellationToken));
@@ -494,7 +490,6 @@ public sealed class ProxyEncoderTests
                 arguments.Add("-");
             },
             workspace.Path,
-            null,
             writer,
             ProcessPriorityClass.BelowNormal,
             TestContext.Current.CancellationToken);
@@ -580,39 +575,22 @@ public sealed class ProxyEncoderTests
 
         async Task<string[]> ProbeAsync(string showEntries)
         {
-            var values = new List<string>();
-
-            void Collect(ReadOnlySpan<char> line)
+            var startInfo = new ProcessStartInfo(Ymm4TestEnvironment.FFprobePath)
             {
-                var trimmed = line.Trim();
-                if (!trimmed.IsEmpty)
-                    values.Add(new string(trimmed));
-            }
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory = Path,
+            };
+            foreach (var argument in new[] { "-hide_banner", "-loglevel", "error", "-select_streams", "v:0", "-show_entries", showEntries, "-of", "csv=p=0", "-i", OutputPath })
+                startInfo.ArgumentList.Add(argument);
 
-            var result = await FFmpegProcessRunner.RunAsync(
-                Ymm4TestEnvironment.FFprobePath,
-                arguments =>
-                {
-                    arguments.Add("-hide_banner");
-                    arguments.Add("-loglevel");
-                    arguments.Add("error");
-                    arguments.Add("-select_streams");
-                    arguments.Add("v:0");
-                    arguments.Add("-show_entries");
-                    arguments.Add(showEntries);
-                    arguments.Add("-of");
-                    arguments.Add("csv=p=0");
-                    arguments.Add("-i");
-                    arguments.Add(OutputPath);
-                },
-                Path,
-                Collect,
-                null,
-                ProcessPriorityClass.BelowNormal,
-                CancellationToken.None);
+            using var process = Process.Start(startInfo)!;
+            var output = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken);
 
-            Assert.True(result.IsSuccess, result.Diagnostics);
-            return [.. values];
+            Assert.Equal(0, process.ExitCode);
+            return output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
         async Task RunFFmpegAsync(Action<Collection<string>> argumentWriter)
@@ -621,7 +599,6 @@ public sealed class ProxyEncoderTests
                 Ymm4TestEnvironment.FFmpegPath,
                 argumentWriter,
                 Path,
-                null,
                 null,
                 ProcessPriorityClass.BelowNormal,
                 CancellationToken.None);

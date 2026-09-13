@@ -9,8 +9,6 @@ using YukkuriMovieMaker.Commons;
 
 namespace ProxyForge.Encoding;
 
-internal delegate void FFmpegLineHandler(ReadOnlySpan<char> line);
-
 internal delegate Task FFmpegInputWriter(Stream destination, CancellationToken cancellationToken);
 
 internal readonly record struct FFmpegProcessResult(int ExitCode, string Diagnostics)
@@ -60,7 +58,6 @@ internal static class FFmpegProcessRunner
         string executablePath,
         Action<Collection<string>> argumentWriter,
         string workingDirectory,
-        FFmpegLineHandler? standardOutputHandler,
         FFmpegInputWriter? standardInputWriter,
         ProcessPriorityClass priority,
         CancellationToken cancellationToken)
@@ -102,8 +99,8 @@ internal static class FFmpegProcessRunner
             Log.Default.Write("ProxyForge: ffmpeg の優先度を設定できませんでした。", exception);
         }
 
-        var standardOutputTask = PumpLinesAsync(process.StandardOutput, standardOutputHandler);
-        var standardErrorTask = PumpLinesAsync(process.StandardError, diagnostics.Append);
+        var standardOutputTask = DrainAsync(process.StandardOutput);
+        var standardErrorTask = PumpLinesAsync(process.StandardError, diagnostics);
 
         var registration = cancellationToken.CanBeCanceled
             ? cancellationToken.Register(static state => TryKill((Process)state!), process)
@@ -178,20 +175,26 @@ internal static class FFmpegProcessRunner
         }
     }
 
-    static async Task PumpLinesAsync(TextReader reader, FFmpegLineHandler? handler)
+    static async Task DrainAsync(TextReader reader)
     {
         var buffer = ArrayPool<char>.Shared.Rent(LineBufferLength);
         try
         {
-            if (handler is null)
+            while (await reader.ReadAsync(buffer).ConfigureAwait(false) > 0)
             {
-                while (await reader.ReadAsync(buffer).ConfigureAwait(false) > 0)
-                {
-                }
-
-                return;
             }
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(buffer);
+        }
+    }
 
+    static async Task PumpLinesAsync(TextReader reader, FFmpegDiagnosticsBuffer diagnostics)
+    {
+        var buffer = ArrayPool<char>.Shared.Rent(LineBufferLength);
+        try
+        {
             var length = 0;
             while (true)
             {
@@ -209,7 +212,7 @@ internal static class FFmpegProcessRunner
                     if (index < 0)
                         break;
 
-                    handler(TrimLineEnd(pending[..index]));
+                    diagnostics.Append(pending[..index]);
                     consumed += index + 1;
                 }
 
@@ -220,20 +223,17 @@ internal static class FFmpegProcessRunner
                 }
                 else if (length == buffer.Length)
                 {
-                    handler(buffer.AsSpan(0, length));
+                    diagnostics.Append(buffer.AsSpan(0, length));
                     length = 0;
                 }
             }
 
             if (length > 0)
-                handler(TrimLineEnd(buffer.AsSpan(0, length)));
+                diagnostics.Append(buffer.AsSpan(0, length));
         }
         finally
         {
             ArrayPool<char>.Shared.Return(buffer);
         }
     }
-
-    static ReadOnlySpan<char> TrimLineEnd(ReadOnlySpan<char> line)
-        => line.Length > 0 && line[^1] == '\r' ? line[..^1] : line;
 }

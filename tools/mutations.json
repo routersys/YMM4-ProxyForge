@@ -90,12 +90,6 @@
     "replace": "if (trimmed.IsEmpty)"
   },
   {
-    "name": "行末の復帰を取り除かない",
-    "file": "ProxyForge/Encoding/FFmpegProcessRunner.cs",
-    "find": "=> line.Length > 0 && line[^1] == '\\r' ? line[..^1] : line;",
-    "replace": "=> line;"
-  },
-  {
     "name": "入力の失敗をすべて包む",
     "file": "ProxyForge/Encoding/FFmpegProcessRunner.cs",
     "find": "if (inputFailure is IOException)",

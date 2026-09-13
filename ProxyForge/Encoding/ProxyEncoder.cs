@@ -94,7 +94,6 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
                 executables.FFmpegPath,
                 arguments => FFmpegArguments.WriteEncode(arguments, in encodeRequest),
                 request.WorkingDirectory,
-                null,
                 pump.WriteAsync,
                 ProcessPriorityClass.BelowNormal,
                 cancellationToken).ConfigureAwait(false);

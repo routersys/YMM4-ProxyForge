@@ -109,7 +109,6 @@ internal static class FFmpegEncoderSelector
                 arguments => FFmpegArguments.WriteEncoderProbe(arguments, encoder, width, height),
                 workingDirectory,
                 null,
-                null,
                 ProcessPriorityClass.BelowNormal,
                 timeout.Token).ConfigureAwait(false);
 
