@@ -8,6 +8,7 @@ internal static class Ymm4AssemblyResolver
 {
     const string MetadataKey = "Ymm4Directory";
     const string AssemblyExtension = ".dll";
+    const string UserDirectoryName = "user";
 
     public static string Directory { get; } = ReadDirectory();
 
@@ -19,6 +20,7 @@ internal static class Ymm4AssemblyResolver
         if (!IsConfigured)
             return;
 
+        System.IO.Directory.CreateDirectory(Path.Combine(AppContext.BaseDirectory, UserDirectoryName));
         AppDomain.CurrentDomain.AssemblyResolve += (_, arguments) =>
         {
             var name = new AssemblyName(arguments.Name).Name;
