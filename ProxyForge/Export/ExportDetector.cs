@@ -76,28 +76,26 @@ internal sealed class ExportDetector(
             Interlocked.Exchange(ref phase, (int)ExportPhase.Idle);
     }
 
-    public bool IsExporting()
+    public bool IsExporting() => Resolve() == ExportPhase.Exporting;
+
+    public ExportPhase Resolve()
     {
         if (commandLineEncode)
-            return true;
+            return ExportPhase.Exporting;
 
-        switch (Phase)
-        {
-            case ExportPhase.Idle:
-                return false;
-            case ExportPhase.Exporting:
-                return true;
-        }
+        var current = Phase;
+        if (current != ExportPhase.Preparing)
+            return current;
 
         switch (resolvePhase())
         {
             case ExportPhase.Idle:
-                Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);
-                return false;
+                var previous = (ExportPhase)Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);
+                return previous == ExportPhase.Preparing ? ExportPhase.Idle : previous;
             case ExportPhase.Preparing:
-                return false;
+                return ExportPhase.Preparing;
             default:
-                return true;
+                return ExportPhase.Exporting;
         }
     }
 }

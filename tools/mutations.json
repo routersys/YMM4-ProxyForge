@@ -212,20 +212,32 @@
   {
     "name": "判定できない時を出力中とみなさない",
     "file": "ProxyForge/Export/ExportDetector.cs",
-    "find": "            default:\r\n                return true;\r\n        }\r\n    }",
-    "replace": "            default:\r\n                return false;\r\n        }\r\n    }"
+    "find": "            default:\r\n                return ExportPhase.Exporting;\r\n        }\r\n    }",
+    "replace": "            default:\r\n                return ExportPhase.Idle;\r\n        }\r\n    }"
   },
   {
     "name": "モーダルダイアログの間を出力中とみなす",
     "file": "ProxyForge/Export/ExportDetector.cs",
-    "find": "            case ExportPhase.Preparing:\r\n                return false;",
-    "replace": "            case ExportPhase.Preparing:\r\n                return true;"
+    "find": "            case ExportPhase.Preparing:\r\n                return ExportPhase.Preparing;",
+    "replace": "            case ExportPhase.Preparing:\r\n                return ExportPhase.Exporting;"
   },
   {
     "name": "取り消された準備を待機へ戻さない",
     "file": "ProxyForge/Export/ExportDetector.cs",
-    "find": "                Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);\r\n",
-    "replace": ""
+    "find": "var previous = (ExportPhase)Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);",
+    "replace": "var previous = ExportPhase.Preparing;"
+  },
+  {
+    "name": "解決の途中で始まった出力を無視する",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "return previous == ExportPhase.Preparing ? ExportPhase.Idle : previous;",
+    "replace": "return ExportPhase.Idle;"
+  },
+  {
+    "name": "コマンドラインの出力を解決で出力中とみなさない",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "        if (commandLineEncode)\r\n            return ExportPhase.Exporting;\r\n\r\n        var current = Phase;",
+    "replace": "        var current = Phase;"
   },
   {
     "name": "題名の前方一致で分類する",

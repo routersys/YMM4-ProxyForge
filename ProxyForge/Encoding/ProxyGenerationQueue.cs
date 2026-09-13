@@ -48,7 +48,7 @@ internal sealed class ProxyGenerationQueue(
         ProxyCache.Shared,
         (request, progress, cancellationToken) => new ProxyEncoder(FFmpegRuntime.Executables, VideoSourceLoader.Load).EncodeAsync(request, progress, cancellationToken),
         () => new ProxyEncodeOptions(ProxyForgeSettings.Default.BitrateScale, ProxyForgeSettings.Default.KeyFrameInterval, ProxyForgeSettings.Default.UsesHardwareEncoder),
-        () => ExportDetector.Shared.Phase,
+        ExportDetector.Shared.Resolve,
         ProxyForgeTelemetry.Report,
         UiThread.Post);
 

@@ -47,6 +47,7 @@ public sealed class ExportDetectorTests
 
         Assert.True(detector.IsCommandLineEncode);
         Assert.True(detector.IsExporting());
+        Assert.Equal(ExportPhase.Exporting, detector.Resolve());
         Assert.Empty(calls);
         Assert.Equal(ExportPhase.Idle, detector.Phase);
     }
@@ -58,6 +59,7 @@ public sealed class ExportDetectorTests
         var detector = Create(false, resolveCalls: calls);
 
         Assert.False(detector.IsExporting());
+        Assert.Equal(ExportPhase.Idle, detector.Resolve());
         Assert.Empty(calls);
     }
 
@@ -71,6 +73,7 @@ public sealed class ExportDetectorTests
 
         Assert.Equal(ExportPhase.Exporting, detector.Phase);
         Assert.True(detector.IsExporting());
+        Assert.Equal(ExportPhase.Exporting, detector.Resolve());
         Assert.Empty(calls);
 
         detector.OnWindowClosed(ExportWindowRole.Progress);
@@ -138,8 +141,23 @@ public sealed class ExportDetectorTests
 
         Assert.True(detector.IsExporting());
         Assert.Equal(ExportPhase.Preparing, detector.Phase);
-        Assert.True(detector.IsExporting());
+        Assert.Equal(ExportPhase.Exporting, detector.Resolve());
         Assert.Equal(2, calls.Count);
+    }
+
+    [Fact]
+    public void AnExportThatStartsDuringTheResolutionWins()
+    {
+        ExportDetector? detector = null;
+        detector = Create(false, () =>
+        {
+            detector!.OnWindowOpened(ExportWindowRole.Progress);
+            return ExportPhase.Idle;
+        });
+        detector.OnWindowOpened(ExportWindowRole.Configuration);
+
+        Assert.Equal(ExportPhase.Exporting, detector.Resolve());
+        Assert.Equal(ExportPhase.Exporting, detector.Phase);
     }
 
     [Fact]
@@ -149,7 +167,7 @@ public sealed class ExportDetectorTests
         var detector = Create(false, resolveCalls: calls);
         detector.OnWindowOpened(ExportWindowRole.Configuration);
 
-        Assert.False(detector.IsExporting());
+        Assert.Equal(ExportPhase.Idle, detector.Resolve());
         Assert.Equal(ExportPhase.Idle, detector.Phase);
         Assert.Single(calls);
         Assert.False(detector.IsExporting());
@@ -165,7 +183,7 @@ public sealed class ExportDetectorTests
 
         Assert.False(detector.IsExporting());
         Assert.Equal(ExportPhase.Preparing, detector.Phase);
-        Assert.False(detector.IsExporting());
+        Assert.Equal(ExportPhase.Preparing, detector.Resolve());
         Assert.Equal(2, calls.Count);
     }
 
@@ -176,6 +194,7 @@ public sealed class ExportDetectorTests
         detector.OnWindowOpened(ExportWindowRole.Configuration);
 
         Assert.True(detector.IsExporting());
+        Assert.Equal(ExportPhase.Exporting, detector.Resolve());
         Assert.Equal(ExportPhase.Preparing, detector.Phase);
     }
 
