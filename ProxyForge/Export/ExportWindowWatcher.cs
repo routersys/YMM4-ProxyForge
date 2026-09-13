@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using YukkuriMovieMaker.Commons;
 
@@ -91,7 +92,7 @@ internal static unsafe partial class ExportWindowWatcher
         if (detector is null)
             return null;
 
-        scanned = ExportPhase.Idle;
+        scanned = ComponentDispatcher.IsThreadModal ? ExportPhase.Preparing : ExportPhase.Idle;
         EnumThreadWindows(threadId, &OnWindowEnumerated, 0);
         return scanned;
     }

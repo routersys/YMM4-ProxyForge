@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -334,6 +335,49 @@ public sealed class ExportWindowWatcherTests
     }
 
     [Fact]
+    public void TheScanTreatsAModalDialogWithoutAnOwnerAsPreparing()
+    {
+        var (during, after) = Watch(() =>
+        {
+            var dialog = CreateWindow("Dialog");
+            ExportPhase? during = null;
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+            {
+                during = ExportWindowWatcher.Scan();
+                dialog.Close();
+            }), DispatcherPriority.ContextIdle);
+            dialog.ShowDialog();
+            Pump();
+            return (during, ExportWindowWatcher.Scan());
+        });
+
+        Assert.Equal(ExportPhase.Preparing, during);
+        Assert.Equal(ExportPhase.Idle, after);
+    }
+
+    [Fact]
+    public void TheScanTreatsADisabledVisibleWindowAsPreparing()
+    {
+        var (disabled, enabled) = Watch(() =>
+        {
+            var window = CreateWindow("Owner");
+            window.Show();
+            Pump();
+            var handle = new WindowInteropHelper(window).Handle;
+            EnableWindow(handle, false);
+            var disabled = ExportWindowWatcher.Scan();
+            EnableWindow(handle, true);
+            var enabled = ExportWindowWatcher.Scan();
+            window.Close();
+            Pump();
+            return (disabled, enabled);
+        });
+
+        Assert.Equal(ExportPhase.Preparing, disabled);
+        Assert.Equal(ExportPhase.Idle, enabled);
+    }
+
+    [Fact]
     public void ThePhaseIsResolvedOnTheWatchingThread()
     {
         var (fromAnotherThread, fromTheWatchingThread) = Watch(() =>
@@ -377,4 +421,8 @@ public sealed class ExportWindowWatcherTests
 
         Assert.Equal(ExportPhase.Exporting, phase);
     }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool EnableWindow(nint window, [MarshalAs(UnmanagedType.Bool)] bool enable);
 }

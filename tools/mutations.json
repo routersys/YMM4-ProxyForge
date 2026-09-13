@@ -282,6 +282,12 @@
     "replace": ""
   },
   {
+    "name": "走査でスレッドのモーダル状態を見ない",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "scanned = ComponentDispatcher.IsThreadModal ? ExportPhase.Preparing : ExportPhase.Idle;",
+    "replace": "scanned = ExportPhase.Idle;"
+  },
+  {
     "name": "走査で隠れたウィンドウも数える",
     "file": "ProxyForge/Export/ExportWindowWatcher.cs",
     "find": "        if (!IsWindowVisible(window))\r\n            return true;\r\n\r\n        Span<char> title = stackalloc char[TitleCapacity];\r\n        switch",
