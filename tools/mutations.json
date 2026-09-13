@@ -1,0 +1,392 @@
+[
+  {
+    "name": "標本の時刻をフレームの先頭にする",
+    "file": "ProxyForge/Sources/FrameRate.cs",
+    "find": "var ticks = (Int128)(2L * frameIndex + 1L) * Denominator * TimeSpan.TicksPerSecond / (2L * Numerator);",
+    "replace": "var ticks = (Int128)(2L * frameIndex) * Denominator * TimeSpan.TicksPerSecond / (2L * Numerator);"
+  },
+  {
+    "name": "近似の約分を飛ばす",
+    "file": "ProxyForge/Sources/FrameRate.cs",
+    "find": "if (divisor <= 1)",
+    "replace": "if (divisor >= 1)"
+  },
+  {
+    "name": "フレーム数の検算を外す",
+    "file": "ProxyForge/Sources/FrameRateResolver.cs",
+    "find": "if (candidate.GetFrameIndex(duration) != frameCount)",
+    "replace": "if (candidate.GetFrameIndex(duration) != frameCount && false)"
+  },
+  {
+    "name": "区間内の検算を外す",
+    "file": "ProxyForge/Sources/FrameRateResolver.cs",
+    "find": "for (var sample = 1; sample < VerificationSamples; sample++)",
+    "replace": "for (var sample = 1; sample < 1; sample++)"
+  },
+  {
+    "name": "最も簡単な有理数で切り上げを間違える",
+    "file": "ProxyForge/Sources/FrameRateResolver.cs",
+    "find": "return (floor + 1, 1);",
+    "replace": "return (floor, 1);"
+  },
+  {
+    "name": "境界の二分探索で等号を落とす",
+    "file": "ProxyForge/Sources/FrameRateResolver.cs",
+    "find": "if (frameIndexOf(new TimeSpan(middle)) >= target)",
+    "replace": "if (frameIndexOf(new TimeSpan(middle)) > target)"
+  },
+  {
+    "name": "偶数への丸めを外す",
+    "file": "ProxyForge/Encoding/ProxyGeometry.cs",
+    "find": "var aligned = value & ~1;",
+    "replace": "var aligned = value;"
+  },
+  {
+    "name": "倍率の範囲の制限を外す",
+    "file": "ProxyForge/Encoding/ProxyGeometry.cs",
+    "find": "var clamped = Math.Clamp(scale, MinimumScale, MaximumScale);",
+    "replace": "var clamped = scale;"
+  },
+  {
+    "name": "ビットレートの上下限を外す",
+    "file": "ProxyForge/Encoding/FFmpegArguments.cs",
+    "find": "return (long)Math.Clamp(bitrate, MinimumBitrate, MaximumBitrate);",
+    "replace": "return (long)bitrate;"
+  },
+  {
+    "name": "倍率が正でなくてもそのまま掛ける",
+    "file": "ProxyForge/Encoding/FFmpegArguments.cs",
+    "find": "var scale = bitrateScale > 0 ? bitrateScale / 100d : 1d;",
+    "replace": "var scale = bitrateScale / 100d;"
+  },
+  {
+    "name": "上書きを許可しない",
+    "file": "ProxyForge/Encoding/FFmpegArguments.cs",
+    "find": "arguments.Add(\"-y\");",
+    "replace": "arguments.Add(\"-n\");"
+  },
+  {
+    "name": "内蔵のベンダーを二重に並べる",
+    "file": "ProxyForge/Encoding/FFmpegEncoderSelector.cs",
+    "find": "if (!discreteVendors.Contains(VendorOf(candidates[i])))",
+    "replace": "if (discreteVendors.Contains(VendorOf(candidates[i])))"
+  },
+  {
+    "name": "AMDの判定を取り違える",
+    "file": "ProxyForge/Encoding/FFmpegEncoderSelector.cs",
+    "find": "if (encoder.Contains(\"amf\", StringComparison.Ordinal))",
+    "replace": "if (encoder.Contains(\"amd\", StringComparison.Ordinal))"
+  },
+  {
+    "name": "診断の一行目を切り詰めない",
+    "file": "ProxyForge/Encoding/FFmpegProcessRunner.cs",
+    "find": "return new string(line.Length > maximumLength ? line[..maximumLength] : line);",
+    "replace": "return new string(line);"
+  },
+  {
+    "name": "診断の容量を守らない",
+    "file": "ProxyForge/Encoding/FFmpegProcessRunner.cs",
+    "find": "if (trimmed.IsEmpty || builder.Length >= capacity)",
+    "replace": "if (trimmed.IsEmpty)"
+  },
+  {
+    "name": "行末の復帰を取り除かない",
+    "file": "ProxyForge/Encoding/FFmpegProcessRunner.cs",
+    "find": "=> line.Length > 0 && line[^1] == '\\r' ? line[..^1] : line;",
+    "replace": "=> line;"
+  },
+  {
+    "name": "入力の失敗をすべて包む",
+    "file": "ProxyForge/Encoding/FFmpegProcessRunner.cs",
+    "find": "if (inputFailure is IOException)",
+    "replace": "if (inputFailure is not null)"
+  },
+  {
+    "name": "縁の余白を無くす",
+    "file": "ProxyForge/Encoding/FrameAlpha.cs",
+    "find": "public const int EdgeMargin = 2;",
+    "replace": "public const int EdgeMargin = 0;"
+  },
+  {
+    "name": "不透明の判定を反転する",
+    "file": "ProxyForge/Encoding/FrameAlpha.cs",
+    "find": "if (row[x * BytesPerPixel + 3] != Opaque)",
+    "replace": "if (row[x * BytesPerPixel + 3] == Opaque)"
+  },
+  {
+    "name": "片方の辺だけで半分に縮める",
+    "file": "ProxyForge/Encoding/ProxyFrameRenderer.cs",
+    "find": "while (contentWidth >= 2d * width && contentHeight >= 2d * height)",
+    "replace": "while (contentWidth >= 2d * width || contentHeight >= 2d * height)"
+  },
+  {
+    "name": "不透明な黒で塗り潰す",
+    "file": "ProxyForge/Encoding/ProxyFrameRenderer.cs",
+    "find": "context.Clear(new Color4(0f, 0f, 0f, 0f));",
+    "replace": "context.Clear(new Color4(0f, 0f, 0f, 1f));"
+  },
+  {
+    "name": "幅が零でも使えるとみなす",
+    "file": "ProxyForge/Encoding/DisplayBounds.cs",
+    "find": "&& PixelWidth >= 1 && PixelHeight >= 1",
+    "replace": "&& PixelWidth >= 0 && PixelHeight >= 0"
+  },
+  {
+    "name": "進捗を毎フレーム報告する",
+    "file": "ProxyForge/Encoding/ProxyEncoder.cs",
+    "find": "if (step == reportedStep)",
+    "replace": "if (false)"
+  },
+  {
+    "name": "透明の検査を外す",
+    "file": "ProxyForge/Encoding/ProxyEncoder.cs",
+    "find": "if (!FrameAlpha.IsOpaque(frame, geometry.Width, geometry.Height))",
+    "replace": "if (false)"
+  },
+  {
+    "name": "失敗した出力を消さない",
+    "file": "ProxyForge/Encoding/ProxyEncoder.cs",
+    "find": "TryDelete(request.OutputPath);",
+    "replace": "_ = request.OutputPath;"
+  },
+  {
+    "name": "最終利用を更新しない",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "entry.LastUsedTicks = DateTime.UtcNow.Ticks;",
+    "replace": "_ = DateTime.UtcNow.Ticks;"
+  },
+  {
+    "name": "新しい方から削る",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": ".OrderBy(entry => entry.LastUsedTicks).ToList();",
+    "replace": ".OrderByDescending(entry => entry.LastUsedTicks).ToList();"
+  },
+  {
+    "name": "上限ちょうどでも削る",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "if (total <= LimitBytes)",
+    "replace": "if (total < LimitBytes)"
+  },
+  {
+    "name": "追加した項目を保護しない",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "TrimCore(entry);",
+    "replace": "TrimCore(null);"
+  },
+  {
+    "name": "索引にある動画も孤児として消す",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "&& !known.Contains(file))",
+    "replace": "&& true)"
+  },
+  {
+    "name": "除外の判定で元ファイルを見ない",
+    "file": "ProxyForge/Cache/ProxyCache.cs",
+    "find": "return index.Skips.Exists(skip => skip.Matches(source));",
+    "replace": "return index.Skips.Count > 0;"
+  },
+  {
+    "name": "経路の大文字小文字を区別する",
+    "file": "ProxyForge/Cache/SourceIdentity.cs",
+    "find": "&& string.Equals(Path, path, StringComparison.OrdinalIgnoreCase);",
+    "replace": "&& string.Equals(Path, path, StringComparison.Ordinal);"
+  },
+  {
+    "name": "長さの違いを見逃す",
+    "file": "ProxyForge/Cache/SourceIdentity.cs",
+    "find": "=> Length == length",
+    "replace": "=> true"
+  },
+  {
+    "name": "出力の引数が選択肢でも受け付ける",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "return !string.IsNullOrWhiteSpace(input) && !input.StartsWith(\"--\", StringComparison.Ordinal);",
+    "replace": "return !string.IsNullOrWhiteSpace(input);"
+  },
+  {
+    "name": "出力中に設定画面が開いても準備中へ戻す",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "Interlocked.CompareExchange(ref phase, (int)ExportPhase.Preparing, (int)ExportPhase.Idle);",
+    "replace": "Interlocked.Exchange(ref phase, (int)ExportPhase.Preparing);"
+  },
+  {
+    "name": "設定画面が閉じただけで待機へ戻す",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "if (role == ExportWindowRole.Progress)",
+    "replace": "if (role != ExportWindowRole.None)"
+  },
+  {
+    "name": "判定できない時を出力中とみなさない",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "            default:\r\n                return true;\r\n        }\r\n    }",
+    "replace": "            default:\r\n                return false;\r\n        }\r\n    }"
+  },
+  {
+    "name": "モーダルダイアログの間を出力中とみなす",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "            case ExportPhase.Preparing:\r\n                return false;",
+    "replace": "            case ExportPhase.Preparing:\r\n                return true;"
+  },
+  {
+    "name": "取り消された準備を待機へ戻さない",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "                Interlocked.CompareExchange(ref phase, (int)ExportPhase.Idle, (int)ExportPhase.Preparing);\r\n",
+    "replace": ""
+  },
+  {
+    "name": "題名の前方一致で分類する",
+    "file": "ProxyForge/Export/ExportDetector.cs",
+    "find": "if (title.SequenceEqual(progressTitle()))",
+    "replace": "if (title.StartsWith(progressTitle()))"
+  },
+  {
+    "name": "子ウィンドウも出力ウィンドウとみなす",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": " && GetAncestor(window, AncestorParent) == GetDesktopWindow()",
+    "replace": ""
+  },
+  {
+    "name": "隠れたウィンドウの題名も見る",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "if (!windows.ContainsKey(window) && IsWindowVisible(window) &&",
+    "replace": "if (!windows.ContainsKey(window) &&"
+  },
+  {
+    "name": "分類済みのウィンドウの題名を再分類する",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "if (!windows.ContainsKey(window) && IsWindowVisible(window) &&",
+    "replace": "if (IsWindowVisible(window) &&"
+  },
+  {
+    "name": "ウィンドウが隠れても出力を終えない",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "            case EventObjectHide:\r\n            case EventObjectDestroy:",
+    "replace": "            case EventObjectDestroy:"
+  },
+  {
+    "name": "無関係なウィンドウも記録する",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "        if (role == ExportWindowRole.None)\r\n            return;\r\n\r\n        windows[window] = role;",
+    "replace": "        windows[window] = role;"
+  },
+  {
+    "name": "走査で無効なウィンドウを無視する",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "        if (!IsWindowEnabled(window))\r\n            scanned = ExportPhase.Preparing;",
+    "replace": ""
+  },
+  {
+    "name": "走査で隠れたウィンドウも数える",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "        if (!IsWindowVisible(window))\r\n            return true;\r\n\r\n        Span<char> title = stackalloc char[TitleCapacity];\r\n        switch",
+    "replace": "        Span<char> title = stackalloc char[TitleCapacity];\r\n        switch"
+  },
+  {
+    "name": "走査で設定画面を待機とみなす",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "            case ExportWindowRole.Configuration:\r\n                scanned = ExportPhase.Preparing;\r\n                return true;",
+    "replace": "            case ExportWindowRole.Configuration:\r\n                return true;"
+  },
+  {
+    "name": "走査で進捗ウィンドウを見つけても続ける",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "                scanned = ExportPhase.Exporting;\r\n                return false;",
+    "replace": "                scanned = ExportPhase.Exporting;\r\n                return true;"
+  },
+  {
+    "name": "観測する側のスレッドでも待つ",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "        if (target.CheckAccess())\r\n            return Scan();\r\n",
+    "replace": ""
+  },
+  {
+    "name": "二度目の取り付けで置き換える",
+    "file": "ProxyForge/Export/ExportWindowWatcher.cs",
+    "find": "        if (IsAttached)\r\n            return;\r\n\r\n        ExportWindowWatcher.detector = detector;",
+    "replace": "        ExportWindowWatcher.detector = detector;"
+  },
+  {
+    "name": "失敗した項目も再び受け付ける",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "if (pending.ContainsKey(key) || failures.Contains(key))",
+    "replace": "if (pending.ContainsKey(key))"
+  },
+  {
+    "name": "出力の準備中に生成を始める",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "while (exportPhase() != ExportPhase.Idle)",
+    "replace": "while (exportPhase() == ExportPhase.Exporting)"
+  },
+  {
+    "name": "透明以外の失敗を除外として記録する",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "if (exception?.Failure == ProxyEncodeFailure.Transparent)",
+    "replace": "if (exception?.Failure != ProxyEncodeFailure.Transparent)"
+  },
+  {
+    "name": "元ファイルの変更を見逃す",
+    "file": "ProxyForge/Encoding/ProxyGenerationQueue.cs",
+    "find": "if (latest is null || !latest.Value.Matches(key.Source.Path, key.Source.Length, key.Source.WriteTimeTicks))",
+    "replace": "if (false)"
+  },
+  {
+    "name": "最小サイズちょうどを対象外にする",
+    "file": "ProxyForge/Sources/ProxySourceProvider.cs",
+    "find": "source.Length < current.MinimumFileSizeBytes",
+    "replace": "source.Length <= current.MinimumFileSizeBytes"
+  },
+  {
+    "name": "自動生成が無効なら生成中でも待たない",
+    "file": "ProxyForge/Sources/ProxySourceProvider.cs",
+    "find": "if (!current.GeneratesAutomatically && !queue.IsPending(source, scale))",
+    "replace": "if (!current.GeneratesAutomatically)"
+  },
+  {
+    "name": "除外した動画も対象にする",
+    "file": "ProxyForge/Sources/ProxySourceProvider.cs",
+    "find": "|| cache.IsSkipped(source))",
+    "replace": "|| false)"
+  },
+  {
+    "name": "二重の引き渡しを受け付ける",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "if (disposed || frameRate is not null || pending is not null)",
+    "replace": "if (disposed)"
+  },
+  {
+    "name": "切り替えた後の元のソースを解放しない",
+    "file": "ProxyForge/Sources/ProxyVideoSource.cs",
+    "find": "previous.Dispose();",
+    "replace": "_ = previous;"
+  },
+  {
+    "name": "空の読み込み順で先頭を読む",
+    "file": "ProxyForge/PluginOrder.cs",
+    "find": "=> order.Count > 0 && string.Equals(order[0], name, StringComparison.Ordinal);",
+    "replace": "=> string.Equals(order[0], name, StringComparison.Ordinal);"
+  },
+  {
+    "name": "先頭ではなく末尾へ動かす",
+    "file": "ProxyForge/PluginOrder.cs",
+    "find": ".Insert(0, name);",
+    "replace": ".Add(name);"
+  },
+  {
+    "name": "進捗を百分率にしない",
+    "file": "ProxyForge/ViewModels/GenerationItemViewModel.cs",
+    "find": "public double Percentage => Item.Progress * 100d;",
+    "replace": "public double Percentage => Item.Progress;"
+  },
+  {
+    "name": "古い順に並べる",
+    "file": "ProxyForge/ViewModels/ProxyForgeSettingsViewModel.cs",
+    "find": "foreach (var entry in entries.OrderByDescending(entry => entry.LastUsedTicks))",
+    "replace": "foreach (var entry in entries.OrderBy(entry => entry.LastUsedTicks))"
+  },
+  {
+    "name": "閉じられた後も表示する",
+    "file": "ProxyForge/Views/GenerationProgressWindowHost.cs",
+    "find": "=> itemCount > 0 && enabled && !hiddenByUser;",
+    "replace": "=> itemCount > 0 && enabled;"
+  }
+]
