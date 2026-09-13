@@ -191,7 +191,7 @@ public sealed class GenerationProgressViewModelTests
         var source = new ObservableCollection<ProxyGenerationItem>();
         var first = new ProxyGenerationItem(@"C:\a.mp4", 50);
         source.Add(first);
-        var viewModel = new GenerationProgressViewModel(source);
+        var viewModel = new GenerationProgressViewModel(source, () => { });
         var raised = 0;
         viewModel.PropertyChanged += (_, e) =>
         {
@@ -217,10 +217,26 @@ public sealed class GenerationProgressViewModelTests
     }
 
     [Fact]
+    public void TheCancelCommandCancelsEverythingWhileItemsExist()
+    {
+        var source = new ObservableCollection<ProxyGenerationItem>();
+        var cancelled = 0;
+        var viewModel = new GenerationProgressViewModel(source, () => cancelled++);
+
+        Assert.False(viewModel.CancelCommand.CanExecute(null));
+
+        source.Add(new ProxyGenerationItem(@"C:.mp4", 50));
+        Assert.True(viewModel.CancelCommand.CanExecute(null));
+        viewModel.CancelCommand.Execute(null);
+
+        Assert.Equal(1, cancelled);
+    }
+
+    [Fact]
     public void InsertsAtTheSourcePosition()
     {
         var source = new ObservableCollection<ProxyGenerationItem> { new(@"C:\a.mp4", 50), new(@"C:\c.mp4", 50) };
-        var viewModel = new GenerationProgressViewModel(source);
+        var viewModel = new GenerationProgressViewModel(source, () => { });
 
         var inserted = new ProxyGenerationItem(@"C:\b.mp4", 50);
         source.Insert(1, inserted);

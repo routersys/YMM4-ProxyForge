@@ -25,6 +25,8 @@ public partial class GenerationProgressWindow : Window
         Close();
     }
 
+    void OnCloseClick(object sender, RoutedEventArgs e) => Close();
+
     void PlaceAtBottomRight()
     {
         var area = SystemParameters.WorkArea;

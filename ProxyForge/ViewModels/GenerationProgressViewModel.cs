@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Input;
 using ProxyForge.Encoding;
 using YukkuriMovieMaker.Commons;
 
@@ -10,14 +11,17 @@ internal sealed class GenerationProgressViewModel : Bindable
 {
     readonly ObservableCollection<ProxyGenerationItem> source;
 
-    public GenerationProgressViewModel(ObservableCollection<ProxyGenerationItem> source)
+    public GenerationProgressViewModel(ObservableCollection<ProxyGenerationItem> source, Action cancelAll)
     {
         this.source = source;
+        CancelCommand = new ActionCommand(_ => HasItems, _ => cancelAll());
         CollectionChangedEventManager.AddHandler(source, OnSourceChanged);
         Rebuild();
     }
 
     public ObservableCollection<GenerationItemViewModel> Items { get; } = [];
+
+    public ICommand CancelCommand { get; }
 
     public bool HasItems => Items.Count > 0;
 

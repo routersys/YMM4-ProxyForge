@@ -10,6 +10,7 @@ namespace ProxyForge.Views;
 internal static class GenerationProgressWindowHost
 {
     static ObservableCollection<ProxyGenerationItem>? items;
+    static Action? cancelAll;
     static ProxyForgeSettings? settings;
     static GenerationProgressWindow? window;
     static bool suppressed;
@@ -23,6 +24,7 @@ internal static class GenerationProgressWindowHost
             return;
 
         items = queue.Items;
+        cancelAll = queue.CancelAll;
         settings = current;
         CollectionChangedEventManager.AddHandler(items, OnItemsChanged);
         PropertyChangedEventManager.AddHandler(current, OnSettingsChanged, nameof(ProxyForgeSettings.ShowsProgressWindow));
@@ -60,7 +62,7 @@ internal static class GenerationProgressWindowHost
 
     static GenerationProgressWindow Create()
     {
-        var created = new GenerationProgressWindow(new GenerationProgressViewModel(items!));
+        var created = new GenerationProgressWindow(new GenerationProgressViewModel(items!, cancelAll!));
         if (Application.Current?.MainWindow is { IsLoaded: true } owner)
             created.Owner = owner;
         created.HideRequested += (_, _) => suppressed = true;
