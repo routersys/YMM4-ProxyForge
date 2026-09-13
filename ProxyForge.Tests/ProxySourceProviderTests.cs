@@ -27,7 +27,7 @@ public sealed class ProxySourceProviderTests : IDisposable
         Directory.CreateDirectory(root);
         context = devices.CreateContext();
         cache = new ProxyCache(Path.Combine(root, "cache"));
-        queue = new ProxyGenerationQueue(cache, Encode, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { })
+        queue = new ProxyGenerationQueue(cache, Encode, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
         {
             CompletedRetention = TimeSpan.FromMilliseconds(50),
             FailedRetention = TimeSpan.FromMilliseconds(50),
@@ -219,7 +219,7 @@ public sealed class ProxySourceProviderTests : IDisposable
     {
         var path = CreateFile();
         refuseAll = true;
-        var failing = new ProxyGenerationQueue(cache, (_, _, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { })
+        var failing = new ProxyGenerationQueue(cache, (_, _, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
         {
             FailedRetention = TimeSpan.FromMilliseconds(50),
         };
@@ -265,7 +265,7 @@ public sealed class ProxySourceProviderTests : IDisposable
         {
             await release.Task;
             return await Encode(request, null, CancellationToken.None);
-        }, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { })
+        }, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
         {
             CompletedRetention = TimeSpan.FromMilliseconds(50),
         };

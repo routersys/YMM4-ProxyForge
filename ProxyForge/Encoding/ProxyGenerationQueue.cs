@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Windows;
 using ProxyForge.Cache;
 using ProxyForge.Export;
 using ProxyForge.Sources;
@@ -17,7 +16,8 @@ internal sealed class ProxyGenerationQueue(
     ProxyEncodeFunction encode,
     Func<ProxyEncodeOptions> options,
     Func<ExportPhase> exportPhase,
-    Action<Exception> reportUnexpected)
+    Action<Exception> reportUnexpected,
+    Action<Action> onUi)
 {
     public static readonly TimeSpan ExportPollInterval = TimeSpan.FromMilliseconds(500);
 
@@ -34,9 +34,9 @@ internal sealed class ProxyGenerationQueue(
             => HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(key.Source.Path), key.Source.Length, key.Source.WriteTimeTicks, key.Scale);
     }
 
-    sealed class ItemProgress(ProxyGenerationItem item) : IProgress<double>
+    sealed class ItemProgress(ProxyGenerationItem item, Action<Action> onUi) : IProgress<double>
     {
-        public void Report(double value) => OnUi(() => item.Progress = value);
+        public void Report(double value) => onUi(() => item.Progress = value);
     }
 
     readonly Lock gate = new();
@@ -49,7 +49,8 @@ internal sealed class ProxyGenerationQueue(
         (request, progress, cancellationToken) => new ProxyEncoder(FFmpegRuntime.Executables, VideoSourceLoader.Load).EncodeAsync(request, progress, cancellationToken),
         () => new ProxyEncodeOptions(ProxyForgeSettings.Default.BitrateScale, ProxyForgeSettings.Default.KeyFrameInterval, ProxyForgeSettings.Default.UsesHardwareEncoder),
         () => ExportDetector.Shared.Phase,
-        ProxyForgeTelemetry.Report);
+        ProxyForgeTelemetry.Report,
+        UiThread.Post);
 
     public ObservableCollection<ProxyGenerationItem> Items { get; } = [];
 
@@ -130,7 +131,7 @@ internal sealed class ProxyGenerationQueue(
     {
         var token = cancellation.Token;
         var retention = CompletedRetention;
-        OnUi(() => Items.Add(item));
+        onUi(() => Items.Add(item));
 
         try
         {
@@ -138,9 +139,9 @@ internal sealed class ProxyGenerationQueue(
             try
             {
                 await WaitForExportToEndAsync(token).ConfigureAwait(false);
-                OnUi(() => item.Status = ProxyGenerationStatus.Generating);
+                onUi(() => item.Status = ProxyGenerationStatus.Generating);
                 var entry = await GenerateAsync(key, item, token).ConfigureAwait(false);
-                OnUi(() =>
+                onUi(() =>
                 {
                     item.Progress = 1d;
                     item.Status = ProxyGenerationStatus.Completed;
@@ -155,14 +156,14 @@ internal sealed class ProxyGenerationQueue(
         catch (OperationCanceledException)
         {
             retention = CancelledRetention;
-            OnUi(() => item.Status = ProxyGenerationStatus.Cancelled);
+            onUi(() => item.Status = ProxyGenerationStatus.Cancelled);
         }
         catch (ProxyEncodeException exception)
         {
             retention = FailedRetention;
             RememberFailure(key, exception);
             Log.Default.Write($"ProxyForge: プロキシを生成できませんでした。{key.Source.Path}", exception);
-            OnUi(() =>
+            onUi(() =>
             {
                 item.Failure = exception.Failure;
                 item.Status = ProxyGenerationStatus.Failed;
@@ -174,7 +175,7 @@ internal sealed class ProxyGenerationQueue(
             RememberFailure(key, null);
             Log.Default.Write($"ProxyForge: プロキシの生成で想定していない例外が起きました。{key.Source.Path}", exception);
             reportUnexpected(exception);
-            OnUi(() => item.Status = ProxyGenerationStatus.Failed);
+            onUi(() => item.Status = ProxyGenerationStatus.Failed);
         }
         finally
         {
@@ -184,7 +185,7 @@ internal sealed class ProxyGenerationQueue(
         }
 
         await Task.Delay(retention, CancellationToken.None).ConfigureAwait(false);
-        OnUi(() => Items.Remove(item));
+        onUi(() => Items.Remove(item));
     }
 
     async Task WaitForExportToEndAsync(CancellationToken token)
@@ -209,7 +210,7 @@ internal sealed class ProxyGenerationQueue(
         ProxyEncodeResult result;
         try
         {
-            result = await encode(request, new ItemProgress(item), token).ConfigureAwait(false);
+            result = await encode(request, new ItemProgress(item, onUi), token).ConfigureAwait(false);
             var latest = SourceIdentity.Of(key.Source.Path);
             if (latest is null || !latest.Value.Matches(key.Source.Path, key.Source.Length, key.Source.WriteTimeTicks))
                 throw new ProxyEncodeException(ProxyEncodeFailure.SourceChanged, "The source file changed while the proxy was being generated.");
@@ -258,20 +259,5 @@ internal sealed class ProxyGenerationQueue(
         {
             Log.Default.Write($"ProxyForge: 途中まで書き出したファイルを削除できませんでした。{path}", exception);
         }
-    }
-
-    static void OnUi(Action action)
-    {
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        if (dispatcher.HasShutdownStarted)
-            return;
-
-        dispatcher.InvokeAsync(action);
     }
 }

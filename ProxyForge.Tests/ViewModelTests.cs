@@ -255,7 +255,7 @@ public sealed class ProxyForgeSettingsViewModelTests : IDisposable
     {
         Directory.CreateDirectory(root);
         cache = new ProxyCache(Path.Combine(root, "cache"));
-        queue = new ProxyGenerationQueue(cache, (_, _, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { });
+        queue = new ProxyGenerationQueue(cache, (_, _, _) => throw new ProxyEncodeException(ProxyEncodeFailure.FFmpegFailed, "boom"), () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post);
     }
 
     public void Dispose()

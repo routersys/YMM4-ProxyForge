@@ -23,7 +23,7 @@ public sealed class ProxyUpgradeLoaderTests : IDisposable
         Directory.CreateDirectory(root);
         context = devices.CreateContext();
         cache = new ProxyCache(Path.Combine(root, "cache"));
-        queue = new ProxyGenerationQueue(cache, Encode, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { })
+        queue = new ProxyGenerationQueue(cache, Encode, () => new ProxyEncodeOptions(50, 30, false), () => ExportPhase.Idle, _ => { }, TestUiThread.Post)
         {
             CompletedRetention = TimeSpan.FromMilliseconds(50),
         };

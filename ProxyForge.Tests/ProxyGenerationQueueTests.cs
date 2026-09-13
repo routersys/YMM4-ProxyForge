@@ -39,7 +39,7 @@ public sealed class ProxyGenerationQueueTests : IDisposable
     }
 
     ProxyGenerationQueue CreateQueue(ProxyEncodeFunction encode)
-        => new(cache, encode, () => options, () => phase, reported.Add)
+        => new(cache, encode, () => options, () => phase, reported.Add, TestUiThread.Post)
         {
             CompletedRetention = TimeSpan.FromMilliseconds(50),
             CancelledRetention = TimeSpan.FromMilliseconds(50),
@@ -54,16 +54,16 @@ public sealed class ProxyGenerationQueueTests : IDisposable
 
     static async Task WaitUntilAsync(Func<bool> condition)
     {
-        for (var attempt = 0; attempt < 200 && !condition(); attempt++)
+        for (var attempt = 0; attempt < 200 && !TestUiThread.Read(condition); attempt++)
             await Task.Delay(10, TestContext.Current.CancellationToken);
-        Assert.True(condition());
+        Assert.True(TestUiThread.Read(condition));
     }
 
     static async Task<ProxyGenerationItem> EnqueueAsync(ProxyGenerationQueue queue, SourceIdentity source, int scale)
     {
         Assert.True(queue.TryEnqueue(source, scale));
         await WaitUntilAsync(() => queue.Items.Count == 1);
-        return queue.Items[0];
+        return TestUiThread.Read(() => queue.Items[0]);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class ProxyGenerationQueueTests : IDisposable
 
         queue.TryEnqueue(source, 50);
         await started.Task;
-        var item = Assert.Single(queue.Items);
+        var item = TestUiThread.Read(() => Assert.Single(queue.Items));
         Assert.Equal(source.Path, item.SourcePath);
         Assert.Equal("source.mp4", item.FileName);
         Assert.Equal(50, item.Scale);
@@ -223,7 +223,7 @@ public sealed class ProxyGenerationQueueTests : IDisposable
         queue.TryEnqueue(source, 50);
         await Task.Delay(ProxyGenerationQueue.ExportPollInterval * 3, TestContext.Current.CancellationToken);
         Assert.False(encoded);
-        Assert.Equal(ProxyGenerationStatus.Waiting, Assert.Single(queue.Items).Status);
+        Assert.Equal(ProxyGenerationStatus.Waiting, TestUiThread.Read(() => Assert.Single(queue.Items).Status));
 
         phase = ExportPhase.Idle;
         await queue.WhenIdleAsync();
