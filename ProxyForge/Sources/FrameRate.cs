@@ -10,6 +10,22 @@ internal readonly record struct FrameRate(int Numerator, int Denominator)
 
     public int GetFrameIndex(TimeSpan time) => FrameTime.TimeToFrame(time, Numerator, Denominator);
 
+    public int GetContainingFrame(TimeSpan time)
+    {
+        if (time <= TimeSpan.Zero)
+            return 0;
+
+        var frame = (Int128)time.Ticks * Numerator / ((Int128)Denominator * TimeSpan.TicksPerSecond);
+        return frame > int.MaxValue ? int.MaxValue : (int)frame;
+    }
+
+    public TimeSpan GetFrameStart(int frameIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(frameIndex);
+        var ticks = (Int128)frameIndex * Denominator * TimeSpan.TicksPerSecond / Numerator;
+        return new TimeSpan((long)ticks);
+    }
+
     public TimeSpan GetSampleTime(int frameIndex)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(frameIndex);

@@ -150,4 +150,45 @@ public sealed class FrameRateTests
     [Fact]
     public void GetSampleTimeRejectsANegativeIndex()
         => Assert.Throws<ArgumentOutOfRangeException>(() => new FrameRate(30, 1).GetSampleTime(-1));
+
+    [Theory]
+    [InlineData(30, 1, 0L, 0)]
+    [InlineData(30, 1, 3_500_000L, 10)]
+    [InlineData(30, 1, 3_666_666L, 10)]
+    [InlineData(30, 1, 3_666_667L, 11)]
+    [InlineData(30000, 1001, 100_100_000L, 300)]
+    [InlineData(30000, 1001, 100_099_999L, 299)]
+    [InlineData(30, 1, -1L, 0)]
+    [InlineData(30, 1, long.MaxValue, int.MaxValue)]
+    public void GetContainingFrameFloorsLikeTheHostDecoders(int numerator, int denominator, long ticks, int expected)
+        => Assert.Equal(expected, new FrameRate(numerator, denominator).GetContainingFrame(new TimeSpan(ticks)));
+
+    [Fact]
+    public void TheContainingFrameDiffersFromTheRoundedIndexInTheUpperHalf()
+    {
+        var rate = new FrameRate(30, 1);
+        var sample = rate.GetSampleTime(10);
+
+        Assert.Equal(10, rate.GetContainingFrame(sample));
+        Assert.Equal(11, rate.GetFrameIndex(sample));
+    }
+
+    [Theory]
+    [InlineData(30, 1, 300, 100_000_000L)]
+    [InlineData(30000, 1001, 300, 100_100_000L)]
+    [InlineData(24000, 1001, 1, 417_083L)]
+    [InlineData(60, 1, 0, 0L)]
+    public void GetFrameStartIsTheExactBeginningOfTheFrame(int numerator, int denominator, int frame, long expectedTicks)
+    {
+        var rate = new FrameRate(numerator, denominator);
+
+        var start = rate.GetFrameStart(frame);
+
+        Assert.Equal(expectedTicks, start.Ticks);
+        Assert.Equal(frame, rate.GetContainingFrame(start + TimeSpan.FromTicks(1)));
+    }
+
+    [Fact]
+    public void GetFrameStartRejectsANegativeIndex()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => new FrameRate(30, 1).GetFrameStart(-1));
 }
