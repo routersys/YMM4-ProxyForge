@@ -15,6 +15,8 @@ internal sealed class ProxyForgeSettings : SettingsBase<ProxyForgeSettings>
     public const int MaximumBitrateScale = 200;
     public const int MinimumKeyFrameInterval = 1;
     public const int MaximumKeyFrameInterval = 300;
+    public const int MinimumChunkSeconds = 1;
+    public const int MaximumChunkSeconds = 120;
     public const int MinimumCacheLimitGigabytes = 1;
     public const int MaximumCacheLimitGigabytes = 1024;
     const long BytesPerMegabyte = 1024L * 1024L;
@@ -26,6 +28,7 @@ internal sealed class ProxyForgeSettings : SettingsBase<ProxyForgeSettings>
     int minimumFileSizeMegabytes = 100;
     int bitrateScale = 50;
     int keyFrameInterval = 30;
+    int chunkSeconds = 10;
     bool usesHardwareEncoder = true;
     int cacheLimitGigabytes = 10;
     bool showsProgressWindow = true;
@@ -72,6 +75,12 @@ internal sealed class ProxyForgeSettings : SettingsBase<ProxyForgeSettings>
     {
         get => keyFrameInterval;
         set => Set(ref keyFrameInterval, Math.Clamp(value, MinimumKeyFrameInterval, MaximumKeyFrameInterval));
+    }
+
+    public int ChunkSeconds
+    {
+        get => chunkSeconds;
+        set => Set(ref chunkSeconds, Math.Clamp(value, MinimumChunkSeconds, MaximumChunkSeconds));
     }
 
     public bool UsesHardwareEncoder

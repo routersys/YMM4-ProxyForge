@@ -16,6 +16,7 @@ public sealed class ProxyForgeSettingsTests
         Assert.Equal(100, settings.MinimumFileSizeMegabytes);
         Assert.Equal(50, settings.BitrateScale);
         Assert.Equal(30, settings.KeyFrameInterval);
+        Assert.Equal(10, settings.ChunkSeconds);
         Assert.True(settings.UsesHardwareEncoder);
         Assert.Equal(10, settings.CacheLimitGigabytes);
         Assert.True(settings.ShowsProgressWindow);
@@ -69,6 +70,18 @@ public sealed class ProxyForgeSettingsTests
         var settings = new ProxyForgeSettings { KeyFrameInterval = value };
 
         Assert.Equal(expected, settings.KeyFrameInterval);
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(10, 10)]
+    [InlineData(120, 120)]
+    [InlineData(121, 120)]
+    public void TheChunkLengthIsClamped(int value, int expected)
+    {
+        var settings = new ProxyForgeSettings { ChunkSeconds = value };
+
+        Assert.Equal(expected, settings.ChunkSeconds);
     }
 
     [Theory]

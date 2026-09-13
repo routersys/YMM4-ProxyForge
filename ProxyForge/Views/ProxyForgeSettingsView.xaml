@@ -93,6 +93,7 @@
                         <RowDefinition Height="26"/>
                         <RowDefinition Height="26"/>
                         <RowDefinition Height="26"/>
+                        <RowDefinition Height="26"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static root:Texts.BitrateScaleLabel}" VerticalAlignment="Center"/>
                     <c:TextBoxSlider Grid.Row="0" Grid.Column="1" Width="160" HorizontalAlignment="Left"
@@ -104,8 +105,13 @@
                                      Value="{Binding Settings.KeyFrameInterval}"
                                      StringFormat="F0" Unit="{x:Static root:Texts.UnitFrames}" DefaultValue="30"
                                      DefaultMin="1" DefaultMax="120" Min="1" Max="300" Delay="-1"/>
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static root:Texts.UseHardwareEncoder}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    <c:ToggleSlider Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static root:Texts.ChunkLengthLabel}" VerticalAlignment="Center"/>
+                    <c:TextBoxSlider Grid.Row="2" Grid.Column="1" Width="160" HorizontalAlignment="Left"
+                                     Value="{Binding Settings.ChunkSeconds}"
+                                     StringFormat="F0" Unit="{x:Static root:Texts.UnitSeconds}" DefaultValue="10"
+                                     DefaultMin="1" DefaultMax="60" Min="1" Max="120" Delay="-1"/>
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{x:Static root:Texts.UseHardwareEncoder}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <c:ToggleSlider Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center"
                                     Value="{Binding Settings.UsesHardwareEncoder}"/>
                 </Grid>
             </Expander>

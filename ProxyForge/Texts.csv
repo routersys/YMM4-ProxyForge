@@ -19,6 +19,8 @@ EncodingSettings,,エンコード,Encoding,编码,編碼,인코딩,Codificación
 BitrateScaleLabel,,ビットレートの倍率,Bitrate scale,比特率倍率,位元率倍率,비트레이트 배율,Escala de bitrate,مقياس معدل البت,Skala bitrate
 KeyFrameIntervalLabel,,キーフレームの間隔,Keyframe interval,关键帧间隔,關鍵影格間隔,키프레임 간격,Intervalo de fotogramas clave,الفاصل بين الإطارات المفتاحية,Interval keyframe
 UnitFrames,,フレーム,frames,帧,影格,프레임,fotogramas,إطارات,frame
+ChunkLengthLabel,,チャンクの長さ,Chunk length,分块长度,分塊長度,청크 길이,Longitud del fragmento,طول المقطع,Panjang potongan
+UnitSeconds,,秒,s,秒,秒,초,s,ث,dtk
 UseHardwareEncoder,,ハードウェアエンコーダーを使用する,Use a hardware encoder,使用硬件编码器,使用硬體編碼器,하드웨어 인코더 사용,Usar un codificador por hardware,استخدام مُرمِّز العتاد,Gunakan encoder perangkat keras
 CacheSettings,,キャッシュ,Cache,缓存,快取,캐시,Caché,ذاكرة التخزين المؤقت,Cache
 CacheLimit,,上限,Limit,上限,上限,상한,Límite,الحد الأقصى,Batas
