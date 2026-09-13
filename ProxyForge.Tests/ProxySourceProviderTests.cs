@@ -22,7 +22,7 @@ public sealed class ProxySourceProviderTests : IDisposable
     readonly TaskCompletionSource release = new();
     bool exporting;
     bool refuseAll;
-    bool holdEncodes;
+    bool holdOpen;
     int encoded;
 
     public ProxySourceProviderTests()
@@ -55,17 +55,18 @@ public sealed class ProxySourceProviderTests : IDisposable
             FailedRetention = TimeSpan.FromMilliseconds(50),
         };
 
-    Task<IProxyEncodeSession> Open(ProxyEncodeRequest request, CancellationToken cancellationToken)
+    async Task<IProxyEncodeSession> Open(ProxyEncodeRequest request, CancellationToken cancellationToken)
     {
+        if (holdOpen)
+            await release.Task;
+
         var analysis = new ProxyAnalysis(new ProxyGeometry(960, 540), new DisplayBounds(-960f, -540f, 1920f, 1080f), new FrameRate(30, 1), TimeSpan.FromSeconds(20), 600);
-        return Task.FromResult<IProxyEncodeSession>(new FakeEncodeSession(analysis, async (_, _, output, _, _) =>
+        return new FakeEncodeSession(analysis, (_, _, output, _, _) =>
         {
-            if (holdEncodes)
-                await release.Task;
             encoded++;
             File.WriteAllBytes(output, new byte[64]);
-            return 64L;
-        }));
+            return Task.FromResult(64L);
+        });
     }
 
     IVideoFileSource? Factory(IGraphicsDevicesAndContext target, string path)
@@ -307,13 +308,14 @@ public sealed class ProxySourceProviderTests : IDisposable
     {
         var path = CreateFile();
         var identity = IdentityOf(path);
-        holdEncodes = true;
+        holdOpen = true;
         queue.TryEnqueue(identity, 50);
         settings.GeneratesAutomatically = false;
 
         using var source = CreateProvider().Create(context, path);
 
         var proxy = Assert.IsType<ProxyVideoSource>(source);
+        Assert.True(proxy.HasOriginal);
         Assert.Equal(TimeSpan.FromSeconds(20), proxy.Duration);
         release.SetResult();
         await queue.WhenIdleAsync();
