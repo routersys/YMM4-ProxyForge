@@ -203,11 +203,13 @@ public sealed class ProxyVideoSourceTests : IDisposable
         var source = CreateSource();
         var entry = Register(source, 0, 1, 2);
         using var wrapper = CreateWrapper(source, entry, null);
+        var lastTickOfFrame299 = new FrameRate(30, 1).GetFrameStart(300) - TimeSpan.FromTicks(1);
+        Assert.Equal(300, FrameTime.TimeToFrame(lastTickOfFrame299, 30, 1));
 
-        wrapper.Update(FrameTimeOf(299));
+        wrapper.Update(lastTickOfFrame299);
 
         Assert.Equal(0, wrapper.ShownChunk);
-        Assert.Equal(FrameTimeOf(299), chunkSources[0].LastUpdateTime);
+        Assert.Equal(lastTickOfFrame299, chunkSources[0].LastUpdateTime);
         Assert.Equal(299, focus.Get(source));
     }
 
