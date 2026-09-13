@@ -124,8 +124,8 @@ public sealed class FrameRateResolverTests
     [Fact]
     public void FallsBackToTheApproximationWhenTheFunctionDisagreesInsideTheClip()
     {
-        var function = HostFunction(30, 1);
-        var duration = TimeSpan.FromSeconds(10);
+        var function = HostFunction(30000, 1001);
+        var duration = DurationOf(300, 30000, 1001) + TimeSpan.FromMilliseconds(300);
         var frameCount = function(duration);
         var disagreement = new TimeSpan(duration.Ticks / 7 * 3);
 
@@ -135,6 +135,7 @@ public sealed class FrameRateResolverTests
             duration);
 
         Assert.Equal(FrameRate.Approximate(frameCount, duration), rate);
+        Assert.NotEqual(new FrameRate(30000, 1001), rate);
     }
 
     [Fact]
