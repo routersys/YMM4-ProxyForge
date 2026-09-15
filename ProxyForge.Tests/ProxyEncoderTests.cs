@@ -188,6 +188,20 @@ public sealed class ProxyEncoderTests
     }
 
     [Fact]
+    public async Task AnOutputThatCannotBeOpenedIsReportedAsAnFFmpegFailure()
+    {
+        Ymm4TestEnvironment.Require();
+        using var workspace = new Workspace();
+        var encoder = workspace.CreateEncoder(640, 360, 30, 1, 10);
+        using var session = await encoder.OpenAsync(workspace.Request(50), TestContext.Current.CancellationToken);
+        var missing = Path.Combine(workspace.Path, "missing", "proxy.mp4");
+
+        var exception = await Assert.ThrowsAsync<ProxyEncodeException>(() => session.EncodeAsync(0, 10, missing, null, TestContext.Current.CancellationToken));
+
+        Assert.Equal(ProxyEncodeFailure.FFmpegFailed, exception.Failure);
+    }
+
+    [Fact]
     public async Task ASoftEdgeIsNotMistakenForTransparency()
     {
         Ymm4TestEnvironment.Require();
@@ -472,6 +486,44 @@ public sealed class ProxyEncoderTests
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => RunRawInput(workspace, static (_, _) => throw new IOException("frame source exploded")));
 
         Assert.IsType<IOException>(failure.InnerException);
+    }
+
+    [Fact]
+    public async Task RunAsyncReportsTheExitOfFFmpegThatStoppedReadingTheInput()
+    {
+        Ymm4TestEnvironment.Require();
+        using var workspace = new Workspace();
+        var missing = Path.Combine(workspace.Path, "missing", "proxy.mp4");
+        Exception? failure = null;
+
+        var result = await FFmpegProcessRunner.RunAsync(
+            Ymm4TestEnvironment.FFmpegPath,
+            arguments =>
+            {
+                var request = new FFmpegEncodeRequest(missing, 32, 32, new FrameRate(30, 1), 100_000, 1, SoftwareEncoder);
+                FFmpegArguments.WriteEncode(arguments, in request);
+            },
+            workspace.Path,
+            (destination, cancellationToken) => Task.Run(() =>
+            {
+                var frame = new byte[32 * 32 * 4];
+                try
+                {
+                    for (var index = 0; index < 1024; index++)
+                        destination.Write(frame);
+                }
+                catch (IOException exception)
+                {
+                    failure = exception;
+                    throw;
+                }
+            }, cancellationToken),
+            ProcessPriorityClass.BelowNormal,
+            TestContext.Current.CancellationToken);
+
+        Assert.IsType<IOException>(failure);
+        Assert.False(result.IsSuccess);
+        Assert.Contains(missing, result.Diagnostics);
     }
 
     [Fact]

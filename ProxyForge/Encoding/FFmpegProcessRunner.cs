@@ -133,12 +133,13 @@ internal static class FFmpegProcessRunner
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (inputFailure is IOException)
-            throw new InvalidOperationException(string.Concat("Failed to send frames to FFmpeg. ", diagnostics.ToString()), inputFailure);
-        if (inputFailure is not null)
+        var result = new FFmpegProcessResult(process.ExitCode, diagnostics.ToString());
+        if (inputFailure is IOException && result.IsSuccess)
+            throw new InvalidOperationException(string.Concat("Failed to send frames to FFmpeg. ", result.Diagnostics), inputFailure);
+        if (inputFailure is not (null or IOException))
             ExceptionDispatchInfo.Throw(inputFailure);
 
-        return new FFmpegProcessResult(process.ExitCode, diagnostics.ToString());
+        return result;
     }
 
     static async Task WriteStandardInputAsync(Process process, FFmpegInputWriter writer, CancellationToken cancellationToken)
