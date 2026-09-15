@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Interop;
 using ProxyForge.Encoding;
 using ProxyForge.ViewModels;
 
@@ -31,11 +32,7 @@ internal static class GenerationProgressWindowHost
         Update();
     }
 
-    public static void Shutdown()
-    {
-        window?.CloseForShutdown();
-        window = null;
-    }
+    public static void Shutdown() => window?.CloseForShutdown();
 
     static void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => Update();
 
@@ -56,16 +53,18 @@ internal static class GenerationProgressWindowHost
         }
 
         window ??= Create();
-        if (!window.IsVisible)
+        if (window is { IsVisible: false })
             window.Show();
     }
 
-    static GenerationProgressWindow Create()
+    static GenerationProgressWindow? Create()
     {
-        var created = new GenerationProgressWindow(new GenerationProgressViewModel(items!, cancelAll!));
-        if (Application.Current?.MainWindow is { IsLoaded: true } owner)
-            created.Owner = owner;
+        if (Application.Current?.MainWindow is not { } owner || new WindowInteropHelper(owner).Handle == 0)
+            return null;
+
+        var created = new GenerationProgressWindow(new GenerationProgressViewModel(items!, cancelAll!)) { Owner = owner };
         created.HideRequested += (_, _) => suppressed = true;
+        created.Closed += (_, _) => window = null;
         return created;
     }
 }
