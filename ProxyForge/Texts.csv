@@ -49,3 +49,4 @@ FailureTransparent,,透明を含むため対象外です,Excluded because it con
 FailureFFmpegFailed,,ffmpeg が失敗しました,ffmpeg failed,ffmpeg 失败,ffmpeg 失敗,ffmpeg가 실패했습니다,ffmpeg falló,فشل ffmpeg,ffmpeg gagal
 FailureNoOutput,,出力が作られませんでした,No output was produced,未生成输出,未產生輸出,출력이 만들어지지 않았습니다,No se produjo ninguna salida,لم يتم إنتاج أي مخرجات,Tidak ada keluaran yang dihasilkan
 FailureSourceChanged,,元の動画が変更されました,The source video was modified,源视频已被修改,來源影片已被修改,원본 동영상이 변경되었습니다,El vídeo de origen fue modificado,تم تعديل الفيديو المصدر,Video sumber telah diubah
+FailureGraphicsDeviceLost,,GPU デバイスが失われました,The GPU device was lost,GPU 设备已丢失,GPU 裝置已遺失,GPU 디바이스가 제거되었습니다,Se perdió el dispositivo de la GPU,تم فقدان جهاز الرسومات,Perangkat GPU telah hilang

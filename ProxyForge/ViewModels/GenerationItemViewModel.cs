@@ -44,6 +44,7 @@ internal sealed class GenerationItemViewModel : Bindable
         ProxyEncodeFailure.FFmpegFailed => Texts.FailureFFmpegFailed,
         ProxyEncodeFailure.NoOutput => Texts.FailureNoOutput,
         ProxyEncodeFailure.SourceChanged => Texts.FailureSourceChanged,
+        ProxyEncodeFailure.GraphicsDeviceLost => Texts.FailureGraphicsDeviceLost,
         _ => failure.ToString(),
     };
 

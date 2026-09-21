@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using ProxyForge.Sources;
+using Vortice.DXGI;
 using YukkuriMovieMaker.Commons;
 using YukkuriMovieMaker.Plugin.FileSource;
 
@@ -95,6 +96,10 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
             renderer = null;
             return session;
         }
+        catch (SharpGen.Runtime.SharpGenException exception) when (IsDeviceLost(exception.ResultCode))
+        {
+            throw new ProxyEncodeException(ProxyEncodeFailure.GraphicsDeviceLost, "The GPU device was removed, hung, or reset.");
+        }
         finally
         {
             renderer?.Dispose();
@@ -103,6 +108,9 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
             devices?.Dispose();
         }
     }
+
+    static bool IsDeviceLost(SharpGen.Runtime.Result result)
+        => result == ResultCode.DeviceRemoved || result == ResultCode.DeviceHung || result == ResultCode.DeviceReset;
 
     static void TryDelete(string path)
     {
