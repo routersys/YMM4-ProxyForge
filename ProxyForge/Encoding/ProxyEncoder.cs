@@ -36,6 +36,8 @@ internal delegate Task<IProxyEncodeSession> ProxyEncodeSessionFactory(ProxyEncod
 internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFactory sourceFactory)
 {
     const int DiagnosticExcerptLength = 200;
+    const int DeviceLostMaxAttempts = 3;
+    static readonly TimeSpan DeviceLostRetryDelay = TimeSpan.FromSeconds(1);
 
     public async Task<IProxyEncodeSession> OpenAsync(ProxyEncodeRequest request, CancellationToken cancellationToken)
     {
@@ -48,64 +50,72 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
         cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(request.WorkingDirectory);
 
-        GraphicsDevices? devices = null;
-        IGraphicsDevicesAndContext? context = null;
-        IVideoFileSource? source = null;
-        ProxyFrameRenderer? renderer = null;
-
-        try
+        for (var attempt = 1; ; attempt++)
         {
-            devices = new GraphicsDevices();
-            context = devices.CreateContext();
-            context.DeviceContext.SetDpi(ProxyFrameRenderer.ReferenceDpi, ProxyFrameRenderer.ReferenceDpi);
+            GraphicsDevices? devices = null;
+            IGraphicsDevicesAndContext? context = null;
+            IVideoFileSource? source = null;
+            ProxyFrameRenderer? renderer = null;
 
-            source = sourceFactory(context, request.SourcePath)
-                ?? throw new ProxyEncodeException(ProxyEncodeFailure.SourceUnavailable, "No video file source plugin was able to open the input file.");
+            try
+            {
+                devices = new GraphicsDevices();
+                context = devices.CreateContext();
+                context.DeviceContext.SetDpi(ProxyFrameRenderer.ReferenceDpi, ProxyFrameRenderer.ReferenceDpi);
 
-            var duration = source.Duration;
-            if (duration <= TimeSpan.Zero)
-                throw new ProxyEncodeException(ProxyEncodeFailure.NoFrames, "The video source reported a zero duration.");
+                source = sourceFactory(context, request.SourcePath)
+                    ?? throw new ProxyEncodeException(ProxyEncodeFailure.SourceUnavailable, "No video file source plugin was able to open the input file.");
 
-            var frameCount = source.GetFrameIndex(duration);
-            if (frameCount <= 0)
-                throw new ProxyEncodeException(ProxyEncodeFailure.NoFrames, "The video source reported no frames.");
+                var duration = source.Duration;
+                if (duration <= TimeSpan.Zero)
+                    throw new ProxyEncodeException(ProxyEncodeFailure.NoFrames, "The video source reported a zero duration.");
 
-            var frameRate = FrameRateResolver.Resolve(source.GetFrameIndex, frameCount, duration);
+                var frameCount = source.GetFrameIndex(duration);
+                if (frameCount <= 0)
+                    throw new ProxyEncodeException(ProxyEncodeFailure.NoFrames, "The video source reported no frames.");
 
-            source.Update(frameRate.GetSampleTime(0));
-            var display = DisplayBounds.Measure(context.DeviceContext, source.Output);
-            if (!display.IsUsable)
-                throw new ProxyEncodeException(ProxyEncodeFailure.UnusableSize, "The video source reported an unusable image size.");
+                var frameRate = FrameRateResolver.Resolve(source.GetFrameIndex, frameCount, duration);
 
-            var geometry = ProxyGeometryCalculator.Calculate(display.PixelWidth, display.PixelHeight, request.Scale);
-            renderer = new ProxyFrameRenderer(context, source.Output, display, geometry);
+                source.Update(frameRate.GetSampleTime(0));
+                var display = DisplayBounds.Measure(context.DeviceContext, source.Output);
+                if (!display.IsUsable)
+                    throw new ProxyEncodeException(ProxyEncodeFailure.UnusableSize, "The video source reported an unusable image size.");
 
-            var videoEncoder = await FFmpegEncoderSelector.ResolveAsync(
-                executables.FFmpegPath,
-                request.UsesHardwareEncoder,
-                geometry.Width,
-                geometry.Height,
-                request.WorkingDirectory,
-                cancellationToken).ConfigureAwait(false);
+                var geometry = ProxyGeometryCalculator.Calculate(display.PixelWidth, display.PixelHeight, request.Scale);
+                renderer = new ProxyFrameRenderer(context, source.Output, display, geometry);
 
-            var analysis = new ProxyAnalysis(geometry, display, frameRate, duration, frameCount);
-            var session = new Session(executables, request, analysis, videoEncoder, devices, context, source, renderer);
-            devices = null;
-            context = null;
-            source = null;
-            renderer = null;
-            return session;
-        }
-        catch (SharpGen.Runtime.SharpGenException exception) when (IsDeviceLost(exception.ResultCode))
-        {
-            throw new ProxyEncodeException(ProxyEncodeFailure.GraphicsDeviceLost, "The GPU device was removed, hung, or reset.");
-        }
-        finally
-        {
-            renderer?.Dispose();
-            source?.Dispose();
-            context?.Dispose();
-            devices?.Dispose();
+                var videoEncoder = await FFmpegEncoderSelector.ResolveAsync(
+                    executables.FFmpegPath,
+                    request.UsesHardwareEncoder,
+                    geometry.Width,
+                    geometry.Height,
+                    request.WorkingDirectory,
+                    cancellationToken).ConfigureAwait(false);
+
+                var analysis = new ProxyAnalysis(geometry, display, frameRate, duration, frameCount);
+                var session = new Session(executables, request, analysis, videoEncoder, devices, context, source, renderer);
+                devices = null;
+                context = null;
+                source = null;
+                renderer = null;
+                return session;
+            }
+            catch (SharpGen.Runtime.SharpGenException exception) when (IsDeviceLost(exception.ResultCode))
+            {
+                if (attempt >= DeviceLostMaxAttempts)
+                    throw new ProxyEncodeException(ProxyEncodeFailure.GraphicsDeviceLost, "The GPU device was removed, hung, or reset.");
+
+                Log.Default.Write($"ProxyForge: GPU デバイスが失われたため再試行します。({attempt}/{DeviceLostMaxAttempts})", exception);
+            }
+            finally
+            {
+                renderer?.Dispose();
+                source?.Dispose();
+                context?.Dispose();
+                devices?.Dispose();
+            }
+
+            await Task.Delay(DeviceLostRetryDelay, cancellationToken).ConfigureAwait(false);
         }
     }
 
