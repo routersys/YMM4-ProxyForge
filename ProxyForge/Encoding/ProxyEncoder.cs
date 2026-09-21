@@ -100,7 +100,7 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
                 renderer = null;
                 return session;
             }
-            catch (SharpGen.Runtime.SharpGenException exception) when (IsDeviceLost(exception.ResultCode))
+            catch (Exception exception) when (IsDeviceLost(exception))
             {
                 if (attempt >= DeviceLostMaxAttempts)
                     throw new ProxyEncodeException(ProxyEncodeFailure.GraphicsDeviceLost, "The GPU device was removed, hung, or reset.");
@@ -119,8 +119,14 @@ internal sealed class ProxyEncoder(FFmpegExecutables executables, VideoSourceFac
         }
     }
 
-    static bool IsDeviceLost(SharpGen.Runtime.Result result)
-        => result == ResultCode.DeviceRemoved || result == ResultCode.DeviceHung || result == ResultCode.DeviceReset;
+    static bool IsDeviceLost(Exception exception)
+    {
+        if (exception is not (SharpGen.Runtime.SharpGenException or System.Runtime.InteropServices.COMException))
+            return false;
+
+        SharpGen.Runtime.Result result = exception.HResult;
+        return result == ResultCode.DeviceRemoved || result == ResultCode.DeviceHung || result == ResultCode.DeviceReset;
+    }
 
     static void TryDelete(string path)
     {
